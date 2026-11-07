@@ -163,14 +163,14 @@ dsh plugin --profile <profile> add github:xkzm123/dsh-desktop-bridge
 
 ```mermaid
 flowchart TD
-    A[点「下载并安装」] --> B[7 个镜像并发测速<br/>96 KiB 分段读取]
-    B --> C[按吞吐量排序<br/>官方 PyPI 永远兜底]
-    C --> D[uv tool install<br/>装进 toolchain/版本号/]
+    A[点「下载并安装」] --> B[7 个镜像并发测速]
+    B --> C[按吞吐量排序，官方兜底]
+    C --> D[uv tool install 到独立目录]
     D --> E{成功?}
     E -- 否 --> F[换下一个镜像]
     F --> D
-    E -- 是 --> G[校验 exe + dist-info]
-    G --> H[改写 profile 的 cordis.patch.yml<br/>先备份，块内幂等]
+    E -- 是 --> G[校验 exe 与 dist-info]
+    G --> H[改写 profile 的 patch 行]
     H --> I[重启 DSH 生效]
 ```
 
