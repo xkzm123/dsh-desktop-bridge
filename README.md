@@ -164,13 +164,13 @@ dsh plugin --profile <profile> add github:xkzm123/dsh-desktop-bridge
 ```mermaid
 flowchart TD
     A[点「下载并安装」] --> B[7 个镜像并发测速]
-    B --> C[按吞吐量排序，官方兜底]
-    C --> D[uv tool install 到独立目录]
+    B --> C[按吞吐量排序]
+    C --> D[uv tool install]
     D --> E{成功?}
     E -- 否 --> F[换下一个镜像]
     F --> D
-    E -- 是 --> G[校验 exe 与 dist-info]
-    G --> H[改写 profile 的 patch 行]
+    E -- 是 --> G[校验安装结果]
+    G --> H[改写桥的配置行]
     H --> I[重启 DSH 生效]
 ```
 
