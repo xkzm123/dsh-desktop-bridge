@@ -1,0 +1,101 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 640" width="1200" height="640" role="img" aria-label="dsh-desktop-bridge 架构图">
+  <defs>
+    <linearGradient id="bg2" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0b1220"/>
+      <stop offset="1" stop-color="#111c31"/>
+    </linearGradient>
+    <linearGradient id="chain" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#17253f"/>
+      <stop offset="1" stop-color="#131f36"/>
+    </linearGradient>
+    <linearGradient id="own" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1b2440"/>
+      <stop offset="1" stop-color="#161d33"/>
+    </linearGradient>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#3f5c8c"/>
+    </marker>
+    <marker id="arrowAccent" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#5b8cff"/>
+    </marker>
+  </defs>
+
+  <rect width="1200" height="640" fill="url(#bg2)"/>
+
+  <g font-family="system-ui, -apple-system, 'Segoe UI', 'Microsoft YaHei', sans-serif">
+    <!-- headers -->
+    <text x="60" y="46" fill="#dbe7ff" font-size="17" font-weight="600">调用链</text>
+    <text x="60" y="66" fill="#6f86aa" font-size="12.5">一次 mcp__windows__Screenshot 是怎么走到屏幕上的</text>
+
+    <text x="720" y="46" fill="#dbe7ff" font-size="17" font-weight="600">本插件负责的部分</text>
+    <text x="720" y="66" fill="#6f86aa" font-size="12.5">dsh-desktop-bridge 只做这四件事，不重写协议</text>
+
+    <!-- LEFT CHAIN -->
+    <!-- 1 Agent -->
+    <rect x="60" y="92" width="580" height="74" rx="12" fill="url(#chain)" stroke="#2b3f61" stroke-width="1.5"/>
+    <rect x="60" y="92" width="5" height="74" rx="2.5" fill="#4d8dff"/>
+    <text x="86" y="122" fill="#e8f0ff" font-size="15" font-weight="600">DSH Agent（模型）</text>
+    <text x="86" y="144" fill="#7f95b8" font-size="12.5">决定"我要截一张屏"，然后发出一次工具调用</text>
+
+    <!-- 2 tool table -->
+    <rect x="60" y="196" width="580" height="74" rx="12" fill="url(#chain)" stroke="#2b3f61" stroke-width="1.5"/>
+    <rect x="60" y="196" width="5" height="74" rx="2.5" fill="#4d8dff"/>
+    <text x="86" y="226" fill="#e8f0ff" font-size="15" font-weight="600">工具表 · 18 个 mcp__windows__*</text>
+    <text x="86" y="248" fill="#7f95b8" font-size="12.5">Screenshot · Click · Type · Shortcut · Clipboard · Process · Registry …</text>
+
+    <!-- 3 bridge -->
+    <rect x="60" y="300" width="580" height="74" rx="12" fill="url(#chain)" stroke="#2b3f61" stroke-width="1.5"/>
+    <rect x="60" y="300" width="5" height="74" rx="2.5" fill="#4d8dff"/>
+    <text x="86" y="330" fill="#e8f0ff" font-size="15" font-weight="600">@deepseek-ai/dsh-mcp-client</text>
+    <text x="86" y="352" fill="#7f95b8" font-size="12.5">DSH 自带的官方 MCP 桥 · stdio · 不随本仓库分发</text>
+
+    <!-- 4 server -->
+    <rect x="60" y="404" width="580" height="74" rx="12" fill="url(#chain)" stroke="#2b3f61" stroke-width="1.5"/>
+    <rect x="60" y="404" width="5" height="74" rx="2.5" fill="#4d8dff"/>
+    <text x="86" y="434" fill="#e8f0ff" font-size="15" font-weight="600">windows-mcp.exe</text>
+    <text x="86" y="456" fill="#7f95b8" font-size="12.5">Python 服务 · 由 uv 装进独立 toolchain · 每个版本互不覆盖</text>
+
+    <!-- 5 desktop -->
+    <rect x="60" y="508" width="580" height="74" rx="12" fill="url(#chain)" stroke="#2b3f61" stroke-width="1.5"/>
+    <rect x="60" y="508" width="5" height="74" rx="2.5" fill="#7c5cff"/>
+    <text x="86" y="538" fill="#e8f0ff" font-size="15" font-weight="600">Windows 桌面</text>
+    <text x="86" y="560" fill="#7f95b8" font-size="12.5">UI Automation 树 · Win32 窗口 · 截屏 · 鼠标键盘</text>
+
+    <!-- vertical arrows -->
+    <g stroke="#3f5c8c" stroke-width="1.6" marker-end="url(#arrow)">
+      <line x1="350" y1="170" x2="350" y2="192"/>
+      <line x1="350" y1="274" x2="350" y2="296"/>
+      <line x1="350" y1="378" x2="350" y2="400"/>
+      <line x1="350" y1="482" x2="350" y2="504"/>
+    </g>
+
+    <!-- RIGHT: plugin responsibilities -->
+    <rect x="720" y="196" width="420" height="74" rx="12" fill="url(#own)" stroke="#3a3f6b" stroke-width="1.5"/>
+    <rect x="720" y="196" width="5" height="74" rx="2.5" fill="#8b5cf6"/>
+    <text x="746" y="226" fill="#e8f0ff" font-size="15" font-weight="600">Computer Use 开关</text>
+    <text x="746" y="248" fill="#7f95b8" font-size="12.5">默认关闭；关着时工具从模型眼前消失，调用被拦截</text>
+
+    <rect x="720" y="300" width="420" height="74" rx="12" fill="url(#own)" stroke="#3a3f6b" stroke-width="1.5"/>
+    <rect x="720" y="300" width="5" height="74" rx="2.5" fill="#8b5cf6"/>
+    <text x="746" y="330" fill="#e8f0ff" font-size="15" font-weight="600">依赖安装器</text>
+    <text x="746" y="352" fill="#7f95b8" font-size="12.5">7 个 PyPI 镜像测速择优，装完自动改写桥的指向</text>
+
+    <rect x="720" y="404" width="420" height="74" rx="12" fill="url(#own)" stroke="#3a3f6b" stroke-width="1.5"/>
+    <rect x="720" y="404" width="5" height="74" rx="2.5" fill="#8b5cf6"/>
+    <text x="746" y="434" fill="#e8f0ff" font-size="15" font-weight="600">版本管理</text>
+    <text x="746" y="456" fill="#7f95b8" font-size="12.5">按版本隔离安装，一键切换 / 回退，不用重装</text>
+
+    <rect x="720" y="508" width="420" height="74" rx="12" fill="url(#own)" stroke="#3a3f6b" stroke-width="1.5"/>
+    <rect x="720" y="508" width="5" height="74" rx="2.5" fill="#8b5cf6"/>
+    <text x="746" y="538" fill="#e8f0ff" font-size="15" font-weight="600">设置页 + 诊断</text>
+    <text x="746" y="560" fill="#7f95b8" font-size="12.5">超时 / 缩放 / 后端 / 镜像 / 惰性工具；一条命令定位故障</text>
+
+    <!-- dashed connectors -->
+    <g stroke="#5b8cff" stroke-width="1.4" stroke-dasharray="5 5" opacity="0.7" marker-end="url(#arrowAccent)">
+      <path d="M720 233 L648 233" fill="none"/>
+      <path d="M720 337 L648 337" fill="none"/>
+      <path d="M720 441 L648 441" fill="none"/>
+      <path d="M720 545 L648 545" fill="none"/>
+    </g>
+  </g>
+</svg>

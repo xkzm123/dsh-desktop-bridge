@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 330" width="1000" height="330" role="img" aria-label="Computer Use 开关的位置与设置页入口">
+  <defs>
+    <linearGradient id="bg3" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0b1220"/>
+      <stop offset="1" stop-color="#111c31"/>
+    </linearGradient>
+    <linearGradient id="pill" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1e2b47"/>
+      <stop offset="1" stop-color="#18233a"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="1000" height="330" fill="url(#bg3)"/>
+
+  <g font-family="system-ui, -apple-system, 'Segoe UI', 'Microsoft YaHei', sans-serif">
+    <!-- ① label -->
+    <text x="60" y="26" fill="#5b8cff" font-size="12.5" font-weight="600">① 输入框工具行</text>
+    <line x1="150" y1="34" x2="150" y2="52" stroke="#5b8cff" stroke-width="1.4" stroke-dasharray="3 3"/>
+
+    <!-- composer mock -->
+    <rect x="60" y="52" width="880" height="92" rx="16" fill="#141d31" stroke="#2a3c5c" stroke-width="1.5"/>
+    <rect x="80" y="82" width="130" height="32" rx="16" fill="url(#pill)" stroke="#33507f" stroke-width="1.2"/>
+    <circle cx="98" cy="98" r="4.5" fill="#34d399"/>
+    <circle cx="98" cy="98" r="8" fill="#34d399" opacity="0.18"/>
+    <g stroke="#cfe0ff" stroke-width="1.3" fill="none" stroke-linecap="round" stroke-linejoin="round" opacity="0.9">
+      <rect x="112" y="91" width="13" height="9" rx="1.6"/>
+      <line x1="116" y1="103" x2="121" y2="103"/>
+      <line x1="118.5" y1="100" x2="118.5" y2="103"/>
+    </g>
+    <text x="132" y="103" fill="#cfe0ff" font-size="12.5">Computer Use</text>
+
+    <text x="228" y="103" fill="#4e5f7d" font-size="13">发消息或创建任务…</text>
+
+    <rect x="884" y="82" width="32" height="32" rx="16" fill="#1d2b47" stroke="#33507f" stroke-width="1.2"/>
+    <path d="M894 98 h12 M901 93 v10" stroke="#7f95b8" stroke-width="1.4" stroke-linecap="round" transform="rotate(0 898 98)"/>
+
+    <text x="80" y="126" fill="#5c7093" font-size="11.5">绿点 = 已开启 · 灰点 = 已关闭 · 橙点 = 宿主连不上或还没注册到桌面工具</text>
+
+    <!-- ② settings mock -->
+    <text x="392" y="192" fill="#8b5cf6" font-size="12.5" font-weight="600">② 设置 → 桌面控制</text>
+    <line x1="380" y1="200" x2="312" y2="212" stroke="#8b5cf6" stroke-width="1.4" stroke-dasharray="3 3"/>
+
+    <rect x="60" y="186" width="252" height="128" rx="12" fill="#141d31" stroke="#2a3c5c" stroke-width="1.5"/>
+    <text x="80" y="212" fill="#55688a" font-size="11.5" letter-spacing="0.06em">设置</text>
+    <rect x="74" y="224" width="224" height="26" rx="8" fill="none"/>
+    <text x="88" y="241" fill="#6d82a6" font-size="12.5">通用</text>
+    <text x="88" y="267" fill="#6d82a6" font-size="12.5">插件</text>
+    <rect x="74" y="274" width="224" height="28" rx="8" fill="#1d2742" stroke="#3a4a72" stroke-width="1"/>
+    <rect x="74" y="274" width="3" height="28" rx="1.5" fill="#8b5cf6"/>
+    <text x="88" y="292" fill="#e8f0ff" font-size="12.5" font-weight="600">桌面控制</text>
+
+    <text x="392" y="222" fill="#7f95b8" font-size="12.5">依赖安装 / 更新 / 回退、桥接参数、</text>
+    <text x="392" y="242" fill="#7f95b8" font-size="12.5">镜像策略、惰性工具开关，都在这一页。</text>
+    <text x="392" y="272" fill="#5c7093" font-size="11.5">插件自己的卡片（设置 → 插件 → 本插件）只留一行状态和一句指路。</text>
+  </g>
+</svg>

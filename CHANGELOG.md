@@ -1,9 +1,3 @@
-> **Provenance.** This project is a derivative of
-> [dsh-windows-mcp](https://github.com/helloHub1212/dsh-windows-mcp) by
-> [@helloHub1212](https://github.com/helloHub1212), used under the MIT License
-> (see `LICENSE` and `NOTICE`). The entries below document that shared
-> history; releases published here are maintained independently from 0.2.3 on.
-
 # Changelog
 
 All notable changes to this project are documented here. The format follows

@@ -1,396 +1,259 @@
-# dsh-desktop-bridge
+<div align="center">
+  <img src="assets/banner.svg" alt="dsh-desktop-bridge" width="100%">
+</div>
 
-**English** · [中文](https://github.com/xkzm123/dsh-desktop-bridge/blob/main/README.zh.md)
+<h1 align="center">dsh-desktop-bridge</h1>
 
-[![npm version](https://img.shields.io/npm/v/dsh-desktop-bridge.svg)](https://www.npmjs.com/package/dsh-desktop-bridge)
-[![CI](https://github.com/xkzm123/dsh-desktop-bridge/actions/workflows/ci.yml/badge.svg)](https://github.com/xkzm123/dsh-desktop-bridge/actions/workflows/ci.yml)
+<p align="center">
+  <b>把 Windows 桌面交给 agent，但由你说了算。</b><br>
+  截屏 · 点击 · 输入 · 快捷键 · 剪贴板 · 进程 · 注册表 —— 默认关闭，随时一键开启。
+</p>
 
-**Windows desktop automation for [DeepSeek Harness](https://github.com/sandbaseai/deepseek-harness-handbook)** — lets the DSH agent see your screen and drive your PC.
+<p align="center">
+  <a href="https://github.com/xkzm123/dsh-desktop-bridge/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/xkzm123/dsh-desktop-bridge/actions/workflows/ci.yml/badge.svg"></a>
+  <img alt="license" src="https://img.shields.io/badge/license-MIT-3da639?style=flat-square">
+  <img alt="node" src="https://img.shields.io/badge/node-%E2%89%A522-339933?style=flat-square">
+  <img alt="platform" src="https://img.shields.io/badge/platform-Windows%2010%20%2F%2011-0078D4?style=flat-square">
+</p>
 
-This plugin connects [CursorTouch/Windows-MCP](https://github.com/CursorTouch/Windows-MCP) to DSH by mounting one loader row against the **MCP client bridge that already ships inside DeepSeek Harness**. There is no reimplemented protocol client and no second copy of the MCP SDK: the plugin is a *carrier bundle*, and everything you can do comes from the official bridge.
+<p align="center">
+  <a href="#它能做什么">它能做什么</a> ·
+  <a href="#三分钟上手">快速开始</a> ·
+  <a href="#配置">配置</a> ·
+  <a href="#常见问题">常见问题</a>
+</p>
 
-```text
-DSH agent
-  └─ tool call  mcp__windows__Screenshot
-       └─ @deepseek-ai/dsh-mcp-client        (in-box, mounted by this plugin's patch row)
-            └─ uvx windows-mcp@0.8.8 serve   (stdio child process)
-                 └─ your desktop: UIA tree, Win32 input, screen capture
+---
+
+## 这是什么
+
+DeepSeek Harness 的 agent 能读文件、跑命令，但它看不见你的屏幕。
+
+**dsh-desktop-bridge** 补上这一段：它把 [CursorTouch/Windows-MCP](https://github.com/CursorTouch/Windows-MCP) 接进 DSH，于是模型可以截一张屏、找到那个按钮、点下去、把结果读回来——真实窗口、真实鼠标、真实键盘。
+
+它不是一个新写的 MCP 客户端。DSH 内部本来就带着官方的 MCP 桥（`@deepseek-ai/dsh-mcp-client`），这个插件只做四件桥做不到的事：**把开关交给人、把依赖装好、把版本管住、把参数摊开**。
+
+> 桌面控制是**默认关闭**的。装完插件、装好依赖，你不点那个开关，模型连工具名都看不见。
+
+---
+
+## 它能做什么
+
+装上之后，工具表里会出现 18 个 `mcp__windows__*` 工具：
+
+| 分类 | 工具 | 干什么 |
+| --- | --- | --- |
+| **看** | `Screenshot` `Snapshot` | 截屏，附带光标位置、窗口列表、屏幕尺寸 |
+| | `DisplayInventory` | 多显示器布局与 DPI |
+| | `Scrape` | 抓一个网页的正文 |
+| **操作** | `Click` `Move` `Scroll` | 按坐标或按控件名点击、移动、拖拽、滚轮 |
+| | `Type` `MultiEdit` | 输入文本、批量填表 |
+| | `MultiSelect` | 多选文件 / 复选框 |
+| | `Shortcut` | `ctrl+c` 这类组合键 |
+| **等** | `Wait` `WaitFor` | 等固定秒数，或等某个 UI 条件成立 |
+| **系统** | `Clipboard` | 读写剪贴板 |
+| | `Process` | 列进程、结束进程 |
+| | `Registry` | 读写注册表 |
+| | `Notification` | 弹一个系统通知 |
+| | `ControlStatus` | 当前桌面控制归属与用户空闲时长 |
+
+典型用法：
+
+- 「打开设置，把缩放调到 125%」——截屏 → 找到入口 → 点击 → 再截屏确认
+- 「把这张表从网页抄进 Excel」——`Scrape` 取数 → `MultiEdit` 批量填
+- 「看看是哪个进程占了 CPU」——`Process` 列表 + `Notification` 汇报
+- 「帮我把这段文字复制到微信」——`Clipboard` 写入 → 切窗口 → `Shortcut` 粘贴
+
+---
+
+## 为什么不是"又一个 MCP 客户端"
+
+<div align="center">
+  <img src="assets/architecture.svg" alt="架构图：DSH Agent → 工具表 → 官方 MCP 桥 → windows-mcp.exe → Windows 桌面" width="100%">
+</div>
+
+左边是调用链，一条都不归这个仓库管：模型发调用、官方桥走 stdio、`windows-mcp.exe` 用 UI Automation 和 Win32 干活。
+
+右边四件事才是这个插件存在的理由：
+
+- **开关归人。** 桌面控制的开启/关闭是一条 HTTP 路由，写入 `$DSH_HOME`，重启后仍在。关闭时工具从模型的工具表里消失，硬调用也会被 dispatch guard 拒绝——不是"提示一下"，是拿不到。
+- **依赖自己装。** Windows-MCP 是个 Python 程序。插件在 7 个 PyPI 镜像之间测速择优，装完自动把桥指向装好的 exe，**下次开机不再碰网络**。
+- **版本互不覆盖。** 每个版本装在 `toolchain/<version>/` 下，切换只是改写一行配置，回退不下载任何东西。
+- **参数摊开。** 超时、截图缩放、截图后端、要屏蔽哪些工具、用哪个镜像、要不要惰性工具——都在设置页里，不用手改 YAML。
+
+---
+
+## 三分钟上手
+
+### 1. 装 uv（Python 包管理器）
+
+```powershell
+winget install --id=astral-sh.uv -e
 ```
 
-## What it gives the agent
+装完**重启 DSH**，让它能在 PATH 上找到 `uv`。
 
-With the plugin installed and Windows-MCP reachable, these tools appear in the tool list:
+### 2. 装插件
 
-| Tool | What it does |
-| --- | --- |
-| `mcp__windows__Screenshot` | Capture the screen; the image lands in the conversation as a real attachment |
-| `mcp__windows__Snapshot` | Capture an accessibility tree (text, no image tokens) |
-| `mcp__windows__DisplayInventory` | Enumerate displays and their geometry |
-| `mcp__windows__Click` / `Move` / `Scroll` | Mouse input |
-| `mcp__windows__Type` / `Shortcut` | Keyboard input |
-| `mcp__windows__Wait` / `WaitFor` | Sleep, or wait until a UI condition holds |
-| `mcp__windows__Scrape` | Extract text from a window |
-| `mcp__windows__MultiSelect` / `MultiEdit` | Batch element selection / batch edits |
-| `mcp__windows__Clipboard` | Read and write the clipboard |
-| `mcp__windows__Process` | List, start and stop processes |
-| `mcp__windows__Notification` | Read notifications |
-| `mcp__windows__Registry` | Read and write registry values |
-| `mcp__windows__ControlStatus` | Control-loop state. **Cannot be disabled** — upstream force-keeps it |
-| `mcp__windows__App` | Launch/switch apps. *Excluded by default* (upstream only supports it reliably on an English Windows install) |
-| `mcp__windows__PowerShell` / `FileSystem` | *Excluded by default* — DSH already ships shell and file tools |
+在 **DSH Desktop → 设置 → 插件** 里添加这个 bundle，填仓库地址：
 
-Plus one tool of its own, `windows_mcp_doctor`, which explains what is wrong when the `mcp__windows__*` tools are missing.
-
-The composer also gains a **Computer Use** pill, next to the permission control: it shows how many desktop tools are actually registered and remembers your choice across restarts (state file: `~/.dsh/dsh-desktop-bridge.state.json`). It starts **off** — a fresh install never hands the agent your desktop until you switch the pill on yourself.
-
-Switching it off is a hard switch, not a hint. The bridge keeps running, but from the next step on every `mcp__windows__*` tool is filtered out of the tool list the model sees, and a call that still names one is refused at dispatch — in every session and subagent, live, with no restart. Switch it back on and they return immediately; `windows_mcp_doctor` always reports which way it is set.
-
-> **Verified:** Windows 11 + DSH Desktop 0.2.0-rc.2 — the bridged server advertises
-> **18 tools** (the 21 upstream tools minus the three excluded here) and is ready
-> about 1.5 s after launch. The bridge publishes each as `mcp__windows__<ToolName>`.
-
-## Requirements
-
-- **Windows 10/11.**
-- **DeepSeek Harness Desktop** with the in-box `@deepseek-ai/dsh-mcp-client` bridge (0.2.0-rc.2 or newer).
-- **[uv](https://docs.astral.sh/uv/)** on the `PATH` of the process that runs DSH — **Settings → Desktop** uses it to install Windows-MCP. DSH itself boots without it. `%USERPROFILE%\.local\bin` is searched even when it is not on `PATH`.
-- **A model that accepts image input** if you want the agent to actually *see* screenshots.
-
-### Boot is never blocked by the dependency
-
-The bridge row ships **disabled**, on purpose. A `uvx`-style first launch
-resolves Windows-MCP's Python dependencies from the package index, and on a slow
-or blocked network that resolve can sit inside DSH's startup for minutes — the
-window stays on “Loading plugins…”. A plugin must never be able to do that to
-its host, so:
-
-- **First boot after installing the bundle:** DSH starts normally, no Windows
-  tools yet, and the dependency is reported as *not installed* — both on the
-  Plugins page and in **Settings → Desktop**.
-- **Install it from Settings → Desktop** (next section). It probes PyPI mirrors,
-  installs into the plugin's own toolchain directory, and rewrites the bridge row
-  with `disabled: false` and `command:` pointing at the installed executable.
-- **Restart DSH once.** From then on the bridge spawns the exe directly — on
-  Windows 11 the server is ready about **1.5 s** after launch, with no network.
-
-`uv` is only needed by the installer. On a restricted network, point `uv` at a
-mirror once (`%APPDATA%\uv\uv.toml`) and the manual/CLI paths get the same
-speed-up:
-
-```toml
-default-index = "https://mirrors.aliyun.com/pypi/simple"
+```
+github:xkzm123/dsh-desktop-bridge
 ```
 
-## Install
-
-The plugin is a normal DSH bundle. Install it with DSH's own plugin manager:
-
-1. Open **DSH Desktop → Settings → Plugins**.
-2. Add the bundle, pointing at either the published package name, the repository (`github:xkzm123/dsh-desktop-bridge`), or a local checkout of this repo.
-3. **Restart DSH** so the new patch layer is composed at startup.
-
-For non-Electron profiles the CLI does the same thing:
+非 Electron 的 profile 也可以用命令行：
 
 ```powershell
 dsh plugin --profile <profile> add github:xkzm123/dsh-desktop-bridge
 ```
 
-> The Electron app owns the `desktop` profile; the CLI refuses every command against it, including read-only ones. Use the GUI for `desktop`.
+装完**重启 DSH**，让新的 patch 层在启动时生效。
 
-### Install the dependency from the app
+> `desktop` 这个 profile 归 Electron 应用所有，CLI 会拒绝所有针对它的命令——包括只读的。改 `desktop` 请走图形界面。
 
-Windows-MCP itself is a Python program, so the **Dependency** card in **Settings → Desktop** shows its state and installs it for you:
+### 3. 装依赖 + 开开关
 
-- **Dependency** — `installed 0.8.8`, or *not installed*, or *uv not found*.
-- **Download and install** — runs `uv tool install windows-mcp@<pinned>` once (through the fastest mirror), streams the installer output into the page, and offers **Cancel** while it runs.
-- When it finishes, the plugin **writes the bridge row into your profile's `cordis.patch.yml` itself** — after a timestamped backup, inside idempotent markers — with `disabled: false` and `command:` pointing at the installed executable. **Restart DSH** to apply that; from then on the bridge launches the exe directly and never resolves a package index during boot.
+打开 **设置 → 桌面控制 → 依赖**，点 **下载并安装**：
 
-The block it writes is the row documented under [Pin a local interpreter instead of `uvx`](#pin-a-local-interpreter-instead-of-uvx); delete the marked block to return to the inert, `uvx`-based row. The plugin's own page in **Settings → Plugins** keeps a one-line status that points here, and the activation prompt shown after enabling the bundle offers the same install button.
+- 首次约 60 MB，走测速最快的镜像，页面上能实时看到安装日志
+- 装完插件会自动把桥指向新装的 exe，**再重启一次 DSH** 让它生效
+- 重启后回到输入框，点左下角的 **Computer Use**，指示灯变绿
 
-The page also shows the **Patch target**: the `cordis.patch.yml` a manual write would touch, which is the profile this host booted — including a `dsh --profile web` host. If this package sits in more than one profile and the host does not report which one it started, the plugin writes nothing and says so instead of guessing: set `DSH_DESKTOP_BRIDGE_PROFILE=<profile name>` (or an absolute profile directory) for the process that runs DSH and retry.
+到这里就通了。问模型一句「截个屏看看我现在在干什么」验证一下。
 
-### Update Windows-MCP, and roll back
+---
 
-The same page manages the upstream version, so an upgrade never means reinstalling the dependency by hand:
+## 界面在哪里
 
-- **It checks by itself.** On boot, and whenever the page asks, the plugin probes the PyPI mirrors, takes the fastest one that answers and reads its `windows-mcp` index. The result is cached for six hours in `$DSH_HOME/dsh-desktop-bridge.versions.json`, so restarts do not hammer the network.
-- **Versions live side by side.** Every version is installed into its own tool root, `$DSH_HOME/dsh-desktop-bridge/toolchain/<version>/windows-mcp`, through `UV_TOOL_DIR`. Activating a version only rewrites the bridge row (backed up, as above): no reinstall, and the previous version stays on disk.
-- **Update in one click.** **Update to vX** downloads that version from the fastest mirror that works, verifies the executable and its `dist-info`, then activates it — the panel names the running version and the mirror it came from.
-- **Roll back the same way.** **Roll back to vPrev** points the bridge back at the version the active one replaced; nothing is downloaded.
+<div align="center">
+  <img src="assets/switch.svg" alt="Computer Use 开关的位置，以及设置页入口" width="100%">
+</div>
 
-Only managed installs are used by the bridge: it stays disabled until an install (or **Point the bridge at it**) rewrites the row with a real executable, and the panel says which side is live (`uv-tool` vs `managed`).
+只有两个地方：
 
-### Fast mirrors for the Python dependency
+- **输入框工具行**：`Computer Use` 胶囊，带一个状态点。绿=开，灰=关，橙=宿主连不上或还没注册到工具。
+- **设置 → 桌面控制**：依赖安装 / 更新 / 回退、桥接参数、镜像策略、惰性工具开关，全在这一页。
 
-The check measures all seven candidates — PyPI plus the USTC, Aliyun, Tencent Cloud, Huawei Cloud, Nanjing University and TUNA mirrors — with a 96 KiB ranged read, and ranks them by throughput. An install uses the fastest mirror that works and falls back to the next one when a mirror fails, with `UV_CONCURRENT_DOWNLOADS=4`, `UV_HTTP_RETRIES=3` and `UV_HTTP_TIMEOUT=600`, because mirrors rate-limit uv's default of eight parallel downloads (HTTP 429). A mirror that has blocked this network is ranked out instead of failing the install; the measured speed is shown per mirror in the panel.
+插件自己的卡片（设置 → 插件 → 本插件）只留一行状态和一句指路，不重复放安装按钮。
 
-### Settings page and the star button
+---
 
-Everything above, plus a few knobs that do not belong on a plugin card, lives in **Settings → Desktop** — a new entry in the settings sidebar, next to the other plugins' pages:
+## 配置
 
-- **Dependency** — install, reinstall, update, roll back, and a **Point the bridge at it** action, with the live installer log and the patched row's target. The plugin's own page only carries a pointer to this card.
-- **Bridge** — `toolCallTimeoutMs`, the screenshot scale, the capture backend, upstream's flash overlay, and the three tools the bridge may exclude (`App`, `PowerShell`, `FileSystem`). These are written into the bridge row of your profile's `cordis.patch.yml` (timestamped backup first), so **they apply after DSH restarts**; the page states which row is in effect.
-- **Updates** — whether the plugin checks for a newer Windows-MCP on boot, and the mirror policy: `auto` keeps the measured ranking, an explicit mirror pins it, and the official index always stays as the last resort.
-- **Tool exposure** — **Lazy tools** (on by default): the model sees a single `windows_desktop` entry instead of eighteen schemas, calls it, and from the next step the desktop tools it revealed are in the tool table. Turn it off to send every schema on every step.
-- **About** — the plugin version, the repository link, and a **Star** button that opens the project on GitHub in a new tab.
+全部在 **设置 → 桌面控制**。改完点保存，插件参数立即生效，**桥接参数要重启 DSH**（MCP 客户端只在启动时读一次那一行配置）。
 
-Saving is atomic (`$DSH_HOME/dsh-desktop-bridge.settings.json`). A value out of range is clamped to its default and reported instead of being written silently, and a change that leaves the bridge row untouched does not rewrite the patch layer at all. **Revert** restores the defaults in the form.
-
-### Lazy tools
-
-Eighteen tool schemas cost context on every step, including the steps where nobody touches the desktop. With lazy tools on (the default), the model is offered one entry:
-
-> `windows_desktop` — *Reveal the Windows desktop capabilities (screenshots, clicking, typing, windows, clipboard, processes) for this session.*
-
-Calling it with no arguments reveals every capability for that session; `{"query": "screenshot"}` or `{"names": ["mcp__windows__Click"]}` narrows it. The definitions come back in the tool result and the revealed tools join the tool table on the next step, so the choice survives until the session ends. A hidden tool that gets called anyway is refused with a hint to reveal first.
-
-Revelation is per session, and the switch is honest both ways: with **Computer Use** off the entry is hidden too, and nothing can be revealed behind the human's back.
-
-### The welcome dialog
-
-The first time the bundle is enabled — and on every later enable from the Plugins page — a **Welcome to the DSH desktop automation plugin** dialog is raised over the whole window: a frosted sheet on a blurred scrim that leaves the app's own DOM and mounts on `document.body`, so nothing in the page can clip or bury it. It says, in three lines, where the dependency (install, update, rollback) and the parameters live (**Settings → Desktop**), and where the **Computer Use** switch is, and it carries a prominent **Star on GitHub** button. Escape, the backdrop or *Got it* dismisses it; focus is trapped inside while it is open, and a CLI/config enable shows it once per browser instead of every time.
-
-## Verify
-
-```text
-windows_mcp_doctor
-```
-
-Prints the resolved `uv`/`uvx`/`python`, the state of `%USERPROFILE%\.windows-mcp`, the effective bridge row, and the `mcp__windows__*` tools that are actually registered. Then ask the agent:
-
-> Take a screenshot of my desktop and tell me what is on screen.
-
-## Configuration
-
-The defaults live in [`cordis.patch.yml`](cordis.patch.yml). Everything below is set through the `env` block of the `desktop-bridge-mcp` row.
-
-| Variable | Default here | Effect |
+| 项 | 默认 | 说明 |
 | --- | --- | --- |
-| `WINDOWS_MCP_SCREENSHOT_SCALE` | `0.75` | Screenshot downscale, `0.1`–`1.0`. The single biggest lever on image token cost. |
-| `WINDOWS_MCP_DISABLE_FLASH` | `1` | Suppresses upstream's orange "control taken over" border on every capture. |
-| `WINDOWS_MCP_SCREENSHOT_BACKEND` | `auto` | Capture backend; see upstream docs before overriding. |
-| `WINDOWS_MCP_MAX_TREE_ELEMENTS` | `500` | Cap on the accessibility-tree size reported by `Snapshot`. |
-| `WINDOWS_MCP_WATCHDOG` | `off` | Upstream watchdog. Off by default because the UIA event pump can take the whole process down ([upstream #332](https://github.com/CursorTouch/Windows-MCP/issues/332)). |
-| `ANONYMIZED_TELEMETRY` | `false` | Upstream defaults to **on** (PostHog). This plugin turns it off. |
+| 工具调用超时 | `120000` ms | 5000–600000。截屏和 UI 树遍历很慢，调小容易中断，调大卡住时等得久 |
+| 截图缩放 | `0.75` | `0.25 / 0.5 / 0.75 / 1`。越小越省视觉 token，细节也越少 |
+| 截图后端 | `auto` | `dxcam` 最快，`mss` 居中，`pillow` 最慢但最稳 |
+| 截图闪光边框 | 关 | 关掉可少一次桌面重绘 |
+| 屏蔽的工具 | `App, PowerShell, FileSystem` | 不出现在工具表里，省上下文 |
+| 启动时检查更新 | 开 | 每次启动后台查一次，结果缓存 6 小时 |
+| 首选镜像 | `auto` | 也可以固定 USTC / 阿里云 / 腾讯云 / 华为云 / 南京大学 / 清华 TUNA / PyPI |
+| 惰性工具 | 开 | 平时只给模型一个入口，调用后才下发工具定义 |
 
-### Override the row from your profile
+设置写在 `$DSH_HOME/dsh-desktop-bridge.settings.json`，原子写入；越界的值会被夹回默认并明确告诉你，不会静默写坏。
 
-Do not edit the plugin's own file — patch the row by id from your profile's
-`$DSH_HOME/profiles/<profile>/cordis.patch.yml`, which is composed *after* bundle
-rows and therefore wins.
+---
 
-**A patch replaces the whole `config` object; it does not deep-merge it.** The
-loader applies overrides as `target[key] = value` (`applyEntryPatches` in
-`dsh-app-boot`), so a key you leave out is a key you delete: `serverName` is
-required (and names every tool), `transport` is required, `command` is required
-for `stdio`, `url` for `streamable-http`. A patch whose `id` does not exist, or
-whose `name` does not match, is skipped with a warning instead of failing.
+## 工作原理
 
-```yaml
-# $DSH_HOME/profiles/<profile>/cordis.patch.yml — the complete row
-- id: desktop-bridge-mcp
-  config:
-    serverName: windows
-    transport: stdio
-    command: uvx
-    args: [windows-mcp@0.8.8, serve, --exclude-tools, "App,PowerShell,FileSystem"]
-    toolCallTimeoutMs: 120000
-    failOnStartupError: false
-    reconnect: { enabled: true, initialDelayMs: 500, maxDelayMs: 30000, maxAttempts: 10 }
-    env:
-      ANONYMIZED_TELEMETRY: "false"
-      WINDOWS_MCP_DISABLE_FLASH: "1"
-      WINDOWS_MCP_SCREENSHOT_SCALE: "0.5"
+### 装依赖
+
+```mermaid
+flowchart LR
+    A[点「下载并安装」] --> B[7 个镜像并发测速<br/>96 KiB 分段读取]
+    B --> C[按吞吐量排序<br/>官方 PyPI 永远兜底]
+    C --> D[uv tool install<br/>装进 toolchain/版本号/]
+    D --> E{成功?}
+    E -- 否 --> F[换下一个镜像]
+    F --> D
+    E -- 是 --> G[校验 exe + dist-info]
+    G --> H[改写 profile 的 cordis.patch.yml<br/>先备份，块内幂等]
+    H --> I[重启 DSH 生效]
 ```
 
-`--exclude-tools` takes its names as one comma-separated argument
-(`"App,PowerShell,FileSystem"`), and `ControlStatus` is always kept — upstream
-offers no way to exclude it.
+### 惰性工具（默认开启）
 
-### Pin a local interpreter instead of `uvx`
-
-`uvx` re-resolves the package on every launch. For a reproducible setup, install
-it once (`uv tool install windows-mcp`) or use any Python that already has it,
-and change `command`/`args` in the complete row above:
-
-```yaml
-- id: desktop-bridge-mcp
-  config:
-    serverName: windows
-    transport: stdio
-    command: windows-mcp          # or C:\...\python.exe with args: [-m, windows_mcp, serve, ...]
-    args: [serve, --exclude-tools, "App,PowerShell,FileSystem"]
-    toolCallTimeoutMs: 120000
-    failOnStartupError: false
-    reconnect: { enabled: true, initialDelayMs: 500, maxDelayMs: 30000, maxAttempts: 10 }
-    env: { ANONYMIZED_TELEMETRY: "false", WINDOWS_MCP_DISABLE_FLASH: "1", WINDOWS_MCP_SCREENSHOT_SCALE: "0.75" }
+```mermaid
+sequenceDiagram
+    participant M as 模型
+    participant D as DSH
+    participant W as windows-mcp
+    Note over M: 工具表里只有 windows_desktop
+    M->>D: windows_desktop（无参数）
+    D-->>M: 18 个能力的定义
+    Note over M: 下一步起，这些工具才进工具表
+    M->>D: mcp__windows__Screenshot
+    D->>W: stdio 转发
+    W-->>D: 截图 + 光标 + 窗口摘要
+    D-->>M: 结果
 ```
 
-### Use a long-lived HTTP server instead
+18 份 schema 每一步都占上下文，包括根本没人碰桌面的那些步骤。惰性工具把这一步挪到"真的要用了"的时候，调用后按 session 记住。
 
-Windows-MCP can also run as a background server. Upstream's `windows-mcp install`
-registers an ONLOGON scheduled task that serves **streamable-http** on
-`127.0.0.1:8000`; switch the row to match — this variant has `url` instead of
-`command`/`args`/`env`:
+---
 
-```yaml
-- id: desktop-bridge-mcp
-  config:
-    serverName: windows
-    transport: streamable-http
-    url: http://127.0.0.1:8000/mcp/     # upstream prints this URL, trailing slash included
-    toolCallTimeoutMs: 120000
-    failOnStartupError: false
-    reconnect: { enabled: true, initialDelayMs: 500, maxDelayMs: 30000, maxAttempts: 10 }
-```
+## 安全模型
 
-There is no `env` field in this variant, so the telemetry and flash defaults no
-longer apply to the server: start it yourself with `ANONYMIZED_TELEMETRY=false`
-and `WINDOWS_MCP_DISABLE_FLASH=1` if you want the same behaviour.
+三条，按重要性排：
 
-This survives DSH restarts and skips per-launch startup cost, at the price of a
-process that outlives the app. Two upstream caveats: `install` binds the
-scheduled task to the interpreter it was run from (installing from a temporary
-`uvx` environment registers a task pointing at a cache directory that `uv` may
-reclaim — install with `uv tool install windows-mcp` or a fixed venv instead),
-and non-loopback hosts refuse to start without `--auth-key`/`--oauth-client-id`
-or an explicit `--allow-insecure-remote`.
+1. **默认关闭，且关闭是真的关闭。** 工具既不出现在工具表，调用也会被 dispatch guard 拦下。开关状态存在 `$DSH_HOME/dsh-desktop-bridge.state.json`，重启不丢。
+2. **改开关必须来自 DSH 窗口。** 所有写操作（开关、安装、更新、设置）都要求带 GUI 的签名 session cookie——模型就算有 shell 权限，也没法给自己开桌面控制。拿不到 `connection` 服务的部署会在 `/state` 里报 `gate: unobservable`，不会假装安全。
+3. **不回家。** 上游默认开 PostHog 遥测，插件在桥的行里写死 `ANONYMIZED_TELEMETRY=false`。
 
-## Troubleshooting
+除此之外请自己判断：一旦开关打开，模型能做你在这个桌面上能做的一切——包括读写注册表、结束进程。不确定的时候，先关掉开关再让它干活。
 
-| Symptom | Likely cause and fix |
-| --- | --- |
-| No `mcp__windows__*` tools at all | Run `windows_mcp_doctor`. On a fresh install that is expected: the bridge ships disabled until you install the dependency from **Settings → Desktop** and restart DSH. If it is installed already, the doctor prints the effective row — look for `disabled` / `command` — and the host log carries `mcp-client(windows)` lines. |
-| Tools disappeared after an upgrade | The tool names are `mcp__<serverName>__<tool>`. Changing `serverName` changes every tool name (and breaks the prompt cache prefix). |
-| Screenshots come back as text | The active model does not accept image input, or attachments are disabled in your harness configuration. Upstream images are only projected when admission succeeds. |
-| `App` tool fails or returns nothing | Upstream documents it as reliable on English Windows installs only; it is excluded by default. |
-| DSH takes noticeably longer to boot | The bridge should not cost boot time: it ships `disabled: true` and only starts once an install has pointed it at an executable. A slow boot means some *other* row is resolving a toolchain at boot — check the effective row printed by `windows_mcp_doctor`. |
-| Screenshot text is unreadable | Raise `WINDOWS_MCP_SCREENSHOT_SCALE` toward `1.0`; upstream caps captures at 1920×1080. |
+---
 
-## Security
+## 常见问题
 
-This plugin hands the model your mouse, your keyboard, your clipboard, your
-processes and your registry. Treat installing it as handing over control of the
-desktop session it runs in.
+**装了插件，但模型看不到桌面工具**
+桥的那一行出厂是 `disabled: true`，这是故意的：`uvx` 冷启动会解析整棵 Python 依赖树，慢网络下能把 DSH 卡在"加载插件"好几分钟。去 **设置 → 桌面控制 → 依赖** 点安装，装完重启。
 
-What the design does and does not do:
+**显示「未找到 uv」**
+`uv` 不在跑 DSH 那个进程的 PATH 上。装完 uv 要**重启 DSH**，不是重启终端。
 
-- **No network exposure by default.** The default row is stdio: a child process
-  connected by pipes, not a listening socket.
-- **Secret hygiene on the child process.** The bridge starts MCP children from a
-  scrubbed environment: variable names matching `KEY|PASSWORD|SECRET|TOKEN` and
-  **all** `DSH_*` variables are removed before the configured `env` is merged in.
-  Credentials should therefore be passed explicitly through the row's `env`, not
-  inherited.
-- **No telemetry from this plugin.** Upstream's own PostHog reporting is
-  explicitly disabled in the shipped defaults.
-- **Remote serving is upstream's problem, not a hidden default.** If you switch
-  to HTTP, upstream enforces loopback host filtering and refuses to start on a
-  non-loopback address without an auth key.
-- **Switch flips are a window decision, not a network one.** Every mutating
-  route (`/state`, `/prepare`, `/prepare/cancel`, `/bridge`, `/update`,
-  `/settings`) requires the signed session cookie the DSH window receives during
-  the launch-token exchange; without it the request is refused with `401`. A
-  script, `curl`, or a model with shell access cannot turn desktop control on for
-  itself. Reads stay open so pages can render before anything is decided.
-- **When the cookie cannot be checked, the plugin says so.** A composition that
-  mounts no `connection` service (headless hosts, Electron `file://`) cannot be
-  authenticated; `/state` then reports `"gate": {"cookie": "unobservable"}`. In
-  that case do not expose the web server on a non-loopback `--host`.
-- **Files are still files.** The Computer Use flag in
-  `$DSH_HOME/dsh-desktop-bridge.state.json` and the machine-written patch block are
-  ordinary files owned by the same user. An agent that can write them can still
-  change the plugin's behaviour across a restart — the cookie gate closes the
-  HTTP path, not filesystem trust. If that matters to you, run the desktop on a
-  account the agent cannot write to, or do not grant shell access and desktop
-  control to the same model.
+**改了桥接参数没反应**
+桥接参数写进 profile 的 `cordis.patch.yml`，MCP 客户端只在启动时读一次。**重启 DSH**。设置页会明确显示"已写入，重启后生效"。
 
-## How it works
+**提示「检测到多个已装本插件的 profile」**
+插件不去猜该改哪一个。给跑 DSH 的进程设 `DSH_DESKTOP_BRIDGE_PROFILE=<profile 名>`，或给绝对路径，再重试。
 
-DeepSeek Harness plugins are loader patches, and a patch row may mount a package
-that lives inside the Electron `app.asar` — the loader resolves official
-`@deepseek-ai/*` names from the Desktop install anchor. Third-party code cannot
-`import` those packages, but it *can* name them in a patch, because the mount
-happens inside the loader rather than inside plugin code. That is the whole trick
-behind this package:
+**截图太糊 / 太费 token**
+调 `截图缩放`：要看清小字用 `1`，只想看布局用 `0.5`。还可以关掉惰性工具以外的东西——比如把 `App`、`PowerShell` 屏蔽掉省上下文。
 
-```yaml
-- insert:
-    - id: desktop-bridge-plugin
-      name: dsh-desktop-bridge                  # lib/index.js: doctor tool + startup audit
-    - id: desktop-bridge-mcp
-      name: "@deepseek-ai/dsh-mcp-client"    # in-box bridge, configured for Windows-MCP
-      disabled: true                          # inert until an install points it at an exe
-      config: { transport: stdio, command: uvx, args: [windows-mcp@0.8.8, serve, ...] }
-```
+**工具调用超时**
+截屏和 `WaitFor` 本来就慢。把 `工具调用超时` 往上调（最大 600000），比反复重试划算。
 
-Consequences worth knowing:
+**想彻底停用**
+关掉 Computer Use 就够了——工具对模型不可见。想连依赖一起清掉：`uv tool uninstall windows-mcp`，再删掉 `$DSH_HOME/dsh-desktop-bridge/toolchain`。
 
-- The integration is **version-sensitive** in one direction only: the bridge
-  config schema belongs to DSH, not to this plugin. `package.json` declares the
-  patch; DSH decides how to read it.
-- Image projection is a bridge feature: MCP image blocks are saved as DSH
-  attachments and surfaced as native image content. Audio and embedded resources
-  degrade to diagnostic text.
-- **MCP prompts are not supported** by the bridge (resources are, on demand).
+---
 
-## Development
+## 开发
 
 ```powershell
 npm install
-npm test          # node --test, including a real YAML parse of the patch
-npm run check     # node --check lib/index.js
+npm test        # 43 个用例，约 11 秒
+npm run check   # 语法检查
+npm run dump    # 在真实 profile 上打印合成后的配置树，不改动它
 ```
 
-To see the composed config without touching a live profile — and without
-restarting DSH — use the dump harness:
+零运行时依赖，只用 `node:*`。三条纪律写在 `lib/index.js` 头部，改代码前先读：`apply()` 永不抛、只注入确定存在的服务、不打日志噪音。
 
-```powershell
-# one-time: a scratch profile with the real profile's node_modules
-mkdir  $env:USERPROFILE\.dsh\profiles\dtest
-copy   $env:USERPROFILE\.dsh\profiles\desktop\package.json $env:USERPROFILE\.dsh\profiles\dtest\
-cmd /c mklink /J $env:USERPROFILE\.dsh\profiles\dtest\node_modules $env:USERPROFILE\.dsh\profiles\desktop\node_modules
+调试工具在 `tools/`（不发布到 npm）：`mcp-handshake.mjs` 直接和 Windows-MCP 握手，`probe-asar.mjs` 读 Electron 的 `app.asar`，`update-e2e.mjs` 跑真实的下载→激活→回退链路。
 
-npm run dump
-```
+欢迎提 issue 和 PR。
 
-Layout:
+---
 
-```text
-cordis.patch.yml      the integration: two insert rows
-lib/index.js          host half: routes + windows_mcp_doctor + startup audit (no dependencies)
-lib/dependency.js     dependency state, uv invocation, profile bridge-row writer
-lib/pypi.js           PyPI index parsing and version maths (pure functions)
-lib/mirrors.js        mirror candidates, ranged speed probe, ranking
-lib/installs.js       per-version tool roots and the versions state file
-lib/updater.js        version manager: check / install / activate / roll back
-lib/settings.js       user settings: validation, storage, bridge round-trip
-lib/client.js         web half: composer switch, plugin panel, settings page
-test/plugin.test.mjs  patch composition + hostile-context + panel tests
-test/update.test.mjs  version maths, mirror ranking, isolation and rollback state machine
-test/settings.test.mjs  settings validation, bridge round-trip, settings route
-scripts/dump-config.mjs  dev helper for composing against a scratch profile
-tools/                zero-dependency debug probes (not published to npm)
-```
+## 致谢与许可
 
-To exercise the update path for real — real mirrors, real `uv`, real profile
-write — use the e2e harness:
+MIT，见 [LICENSE](LICENSE)。
 
-```powershell
-node tools/update-e2e.mjs --check          # probe the mirrors, read the newest stable version
-node tools/update-e2e.mjs --install 0.8.8  # download, activate, rewrite the bridge row
-node tools/update-e2e.mjs --rollback
-```
-
-Contributions are welcome; keep `lib/index.js` free of runtime dependencies and
-keep `apply()` throw-proof.
-
-## Credits and license
-
-MIT — see [LICENSE](LICENSE).
-
-- Derived from [`dsh-windows-mcp`](https://github.com/helloHub1212/dsh-windows-mcp) by [@helloHub1212](https://github.com/helloHub1212) (MIT). The original copyright notice is kept verbatim in `LICENSE`; see `NOTICE`.
-- [CursorTouch/Windows-MCP](https://github.com/CursorTouch/Windows-MCP) (MIT) does
-  the actual desktop automation. This plugin only wires it up.
-- The MCP client bridge is part of DeepSeek Harness and is not redistributed here.
-- Not affiliated with DeepSeek or with the Windows-MCP authors.
+- [CursorTouch/Windows-MCP](https://github.com/CursorTouch/Windows-MCP)（MIT）负责真正的桌面自动化，本项目只做接线。
+- 本项目派生自 [dsh-windows-mcp](https://github.com/helloHub1212/dsh-windows-mcp)（MIT），原始版权声明保留在 `LICENSE`，详见 [NOTICE](NOTICE)。
+- MCP 客户端桥属于 DeepSeek Harness 本体，不在本仓库分发。
+- 与 DeepSeek 官方、Windows-MCP 作者均无隶属关系。
