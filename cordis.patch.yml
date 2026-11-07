@@ -1,0 +1,90 @@
+# dsh-desktop-bridge — bundle patch layer
+#
+# This package is a CARRIER bundle: it ships no service of its own, it only
+# mounts two loader rows in the DSH profile.
+#
+#   1. `desktop-bridge-plugin`  → this package's host half (lib/index.js). It adds
+#      one diagnostic tool (`windows_mcp_doctor`) and nothing else.
+#   2. `desktop-bridge-mcp`  → the OFFICIAL in-box MCP client bridge shipped by
+#      DeepSeek Harness itself (`@deepseek-ai/dsh-mcp-client`). It lives inside
+#      app.asar and is resolved by the loader from the Desktop install anchor;
+#      a third-party plugin must NOT try to import it.
+#
+# Every tool the bridge registers shows up as `mcp__windows__<ToolName>`.
+#
+# BOOT SAFETY — the bridge row ships `disabled: true` on purpose.
+#
+# The fallback command below is `uvx windows-mcp@0.8.8`, which resolves and
+# downloads Windows-MCP's Python dependencies from the package index. On a slow
+# or blocked network that resolve can sit inside DSH's startup for minutes and
+# the window stays on "Loading plugins…". A plugin must never be able to do that
+# to the host, so the row ships inert: DSH boots, the Plugins page says the
+# dependency is missing, and the user starts the install from there (it probes
+# mirrors and installs into the plugin's own toolchain directory).
+#
+# The installer then writes the row again into the profile's own patch layer
+# ($DSH_HOME/profiles/<profile>/cordis.patch.yml) between the
+# `# >>> dsh-desktop-bridge …` markers, with `disabled: false` and `command:`
+# pointing at the installed executable — so later boots spawn the exe directly
+# and never touch the network or `uvx`.
+#
+# Tuning: change `args` / `env` below, or override this row from your profile's
+# own patch layer:
+#
+#   - id: desktop-bridge-mcp
+#     disabled: false
+#     config:
+#       command: 'C:\path\to\windows-mcp.exe'
+#       args:
+#         - serve
+#         - --exclude-tools
+#         - App
+#
+- insert:
+    - id: desktop-bridge-plugin
+      name: dsh-desktop-bridge
+
+    - id: desktop-bridge-mcp
+      name: "@deepseek-ai/dsh-mcp-client"
+      # Inert until the installer points it at a real executable (see above):
+      # a cold `uvx` resolve inside DSH's startup can hang the whole window.
+      disabled: true
+      config:
+        # Namespace for every tool name: mcp__windows__Screenshot, ...
+        serverName: windows
+        transport: stdio
+        # Only reached if someone re-enables this row without rewriting
+        # `command`; harmless, because by then the toolchain is installed.
+        command: uvx
+        args:
+          # Pinned for reproducibility. Replace with `windows-mcp` to float, or
+          # with an absolute path to a fixed interpreter (`python -m windows_mcp`).
+          - windows-mcp@0.8.8
+          - serve
+          # Curation: drop the tools DSH already covers (its own shell and file
+          # tools), plus `App`, which upstream only supports reliably on an
+          # English Windows install. Never list `ControlStatus` here — upstream
+          # keeps it unconditionally.
+          - --exclude-tools
+          - App,PowerShell,FileSystem
+        # Screenshots, UIA tree walks and PowerShell-style waits are slow.
+        # Keep the pinned version in `args` below: the settings page and the
+        # installer read it, and the profile block the installer writes restates
+        # this row at that version.
+        toolCallTimeoutMs: 120000
+        # Belt and braces: a missing Windows-MCP must never fail the profile.
+        failOnStartupError: false
+        reconnect:
+          enabled: true
+          initialDelayMs: 500
+          maxDelayMs: 30000
+          maxAttempts: 10
+        env:
+          # Upstream defaults to PostHog telemetry ON; a desktop-automation
+          # plugin should not phone home.
+          ANONYMIZED_TELEMETRY: "false"
+          # Suppress the orange "control taken over" flash on every screenshot.
+          WINDOWS_MCP_DISABLE_FLASH: "1"
+          # Downscale screenshots (0.1–1.0) to cut image tokens. Lower it to
+          # 0.5 if your budget is tight; raise it if small UI text is unreadable.
+          WINDOWS_MCP_SCREENSHOT_SCALE: "0.75"

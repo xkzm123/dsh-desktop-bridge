@@ -1,0 +1,15 @@
+dsh-desktop-bridge
+==================
+
+This project is a derivative work of `dsh-windows-mcp`, originally published by
+helloHub1212 at https://github.com/helloHub1212/dsh-windows-mcp.
+
+    Copyright (c) 2026 dsh-windows-mcp contributors
+    Licensed under the MIT License (see LICENSE).
+
+The original copyright notice and the full MIT permission notice are retained
+verbatim in `LICENSE`, as the license requires for copies and substantial
+portions of the software.
+
+Modifications in this repository (package identity, route prefix, state file
+names, repository metadata) are released under the same MIT License.
