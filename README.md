@@ -162,7 +162,7 @@ dsh plugin --profile <profile> add github:xkzm123/dsh-desktop-bridge
 ### 装依赖
 
 ```mermaid
-flowchart LR
+flowchart TD
     A[点「下载并安装」] --> B[7 个镜像并发测速<br/>96 KiB 分段读取]
     B --> C[按吞吐量排序<br/>官方 PyPI 永远兜底]
     C --> D[uv tool install<br/>装进 toolchain/版本号/]
