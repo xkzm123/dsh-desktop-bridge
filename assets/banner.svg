@@ -42,6 +42,9 @@
     </g>
   </g>
 
+  <!-- soft glow behind the monitor -->
+  <circle cx="900" cy="150" r="140" fill="#4d8dff" opacity="0.05"/>
+
   <!-- monitor -->
   <g transform="translate(760 58)">
     <rect x="0" y="0" width="356" height="196" rx="14" fill="url(#screen)" stroke="#2c4470" stroke-width="2"/>
@@ -65,11 +68,4 @@
     <rect x="152" y="196" width="52" height="14" fill="#1a2a46"/>
     <rect x="112" y="210" width="132" height="9" rx="4.5" fill="#22355a"/>
   </g>
-
-  <!-- bridge arc from agent to monitor -->
-  <g stroke="url(#accent)" stroke-width="2.5" fill="none" opacity="0.85">
-    <path d="M470 236 C 560 236, 600 160, 700 150" stroke-dasharray="7 7"/>
-  </g>
-  <circle cx="470" cy="236" r="5" fill="#4d8dff"/>
-  <circle cx="700" cy="150" r="5" fill="#8b5cf6"/>
 </svg>
