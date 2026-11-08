@@ -34,4 +34,4 @@ gives each request a long timeout (900 s), because a cold `uvx` first run
 downloads an entire Python environment before it answers.
 
 This is the fastest way to tell "Windows-MCP is broken" apart from "the bridge
-is misconfigured" when `windows_mcp_doctor` reports a missing tool set.
+is misconfigured" when `windows_control_doctor` reports a missing tool set.

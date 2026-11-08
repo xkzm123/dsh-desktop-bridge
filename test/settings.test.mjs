@@ -1,5 +1,5 @@
 /**
- * dsh-desktop-bridge — settings page tests.
+ * dsh-windows-control — settings page tests.
  *
  * Two layers:
  *   1. the pure settings helpers (validation, storage, bridge round-trip);
@@ -90,7 +90,7 @@ test("settings normalisation clamps values and names what it replaced", () => {
 });
 
 test("settings round-trip through the host file, and corruption falls back", () => {
-  const home = mkdtempSync(join(tmpdir(), "dwmc-settings-"));
+  const home = mkdtempSync(join(tmpdir(), "dwc-settings-"));
 
   assert.deepEqual(readSettings(home), defaultSettings(), "a missing file means defaults");
 
@@ -145,9 +145,9 @@ test("the default bridge row is unchanged and matches the defaults", () => {
 });
 
 test("the profile writer keeps the user settings when it rewrites the patch", () => {
-  const home = mkdtempSync(join(tmpdir(), "dwmc-settings-write-"));
+  const home = mkdtempSync(join(tmpdir(), "dwc-settings-write-"));
   const profile = join(home, "profiles", "test");
-  mkdirSync(join(profile, "node_modules", "dsh-desktop-bridge"), { recursive: true });
+  mkdirSync(join(profile, "node_modules", "dsh-windows-control"), { recursive: true });
   writeFileSync(join(profile, "cordis.patch.yml"), "# my patch layer\n", "utf8");
   const executable = join(home, "windows-mcp.exe");
   writeFileSync(executable, "", "utf8");
@@ -179,7 +179,7 @@ test("mirror candidates honour a pinned mirror and keep the shipped order otherw
 });
 
 test("the host registers the settings route and answers GET/POST", async () => {
-  const home = mkdtempSync(join(tmpdir(), "dwmc-settings-route-"));
+  const home = mkdtempSync(join(tmpdir(), "dwc-settings-route-"));
   process.env.DSH_HOME = home;
   const fresh = await import(`../lib/index.js?settings-route=${Date.now()}`);
 
@@ -226,7 +226,7 @@ test("the host registers the settings route and answers GET/POST", async () => {
   assert.equal(saved.ok, true, "a plugin-only change writes no patch row");
   assert.equal(saved.settings.plugin.autoCheckUpdates, false);
   assert.equal(saved.settings.plugin.preferredMirror, "ustc");
-  assert.equal(JSON.parse(readFileSync(join(home, "dsh-desktop-bridge.settings.json"), "utf8")).plugin.preferredMirror, "ustc");
+  assert.equal(JSON.parse(readFileSync(join(home, "dsh-windows-control.settings.json"), "utf8")).plugin.preferredMirror, "ustc");
 
   const bridgeChange = fakeResponse();
   const bridgeRequest = fakeRequest("POST", JSON.stringify({ settings: { bridge: { screenshotScale: 0.5 } } }));

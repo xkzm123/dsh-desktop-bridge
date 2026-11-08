@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 300" width="1200" height="300" role="img" aria-label="dsh-desktop-bridge — Windows desktop automation for DeepSeek Harness">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 300" width="1200" height="300" role="img" aria-label="dsh-windows-control — Windows desktop automation for DeepSeek Harness">
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
       <stop offset="0" stop-color="#0a1020"/>
@@ -28,7 +28,7 @@
 
   <!-- wordmark -->
   <g font-family="system-ui, -apple-system, 'Segoe UI', 'Microsoft YaHei', sans-serif">
-    <text x="72" y="112" fill="#ffffff" font-size="46" font-weight="700" letter-spacing="-0.5">dsh-desktop-bridge</text>
+    <text x="72" y="112" fill="#ffffff" font-size="46" font-weight="700" letter-spacing="-0.5">dsh-windows-control</text>
     <rect x="72" y="134" width="72" height="4" rx="2" fill="url(#accent)"/>
     <text x="72" y="176" fill="#9db2d4" font-size="19">让 DeepSeek Harness 的 agent 真正看见、并操作你的 Windows 桌面</text>
     <g fill="#5f7699" font-size="14" font-family="ui-monospace, 'Cascadia Code', Consolas, monospace">

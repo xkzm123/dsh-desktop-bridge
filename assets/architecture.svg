@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 640" width="1200" height="640" role="img" aria-label="dsh-desktop-bridge 架构图">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 640" width="1200" height="640" role="img" aria-label="dsh-windows-control 架构图">
   <defs>
     <linearGradient id="bg2" x1="0" y1="0" x2="1" y2="1">
       <stop offset="0" stop-color="#0b1220"/>
@@ -28,7 +28,7 @@
     <text x="60" y="66" fill="#6f86aa" font-size="12.5">一次 mcp__windows__Screenshot 是怎么走到屏幕上的</text>
 
     <text x="720" y="46" fill="#dbe7ff" font-size="17" font-weight="600">本插件负责的部分</text>
-    <text x="720" y="66" fill="#6f86aa" font-size="12.5">dsh-desktop-bridge 只做这四件事，不重写协议</text>
+    <text x="720" y="66" fill="#6f86aa" font-size="12.5">dsh-windows-control 只做这四件事，不重写协议</text>
 
     <!-- LEFT CHAIN -->
     <!-- 1 Agent -->

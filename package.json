@@ -1,9 +1,9 @@
 {
-  "name": "dsh-desktop-bridge",
+  "name": "dsh-windows-control",
   "version": "0.2.3",
-  "description": "Windows desktop automation for DeepSeek Harness — plugs CursorTouch/Windows-MCP (screenshot, UI automation, input, clipboard, processes, registry) into DSH through the official MCP client bridge.",
+  "description": "Windows desktop automation for DeepSeek Harness — mounts CursorTouch/Windows-MCP through the official MCP client bridge, plus a native Win32 fast path for window geometry, launching and input.",
   "license": "MIT",
-  "author": "dsh-desktop-bridge contributors",
+  "author": "dsh-windows-control contributors",
   "type": "module",
   "main": "./lib/index.js",
   "exports": {
@@ -30,7 +30,9 @@
     "automation",
     "computer-use",
     "ui-automation",
-    "screenshot"
+    "screenshot",
+    "win32",
+    "fastpath"
   ],
   "engines": {
     "node": ">=22"
@@ -50,12 +52,12 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/xkzm123/dsh-desktop-bridge.git"
+    "url": "git+https://github.com/xkzm123/dsh-windows-control.git"
   },
   "bugs": {
-    "url": "https://github.com/xkzm123/dsh-desktop-bridge/issues"
+    "url": "https://github.com/xkzm123/dsh-windows-control/issues"
   },
-  "homepage": "https://github.com/xkzm123/dsh-desktop-bridge#readme",
+  "homepage": "https://github.com/xkzm123/dsh-windows-control#readme",
   "devDependencies": {
     "js-yaml": "^4.1.0"
   },

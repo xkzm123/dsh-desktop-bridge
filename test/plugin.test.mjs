@@ -54,7 +54,7 @@ try {
  * ------------------------------------------------------------------ */
 
 test("package manifest declares a carrier bundle patch", () => {
-  assert.equal(manifest.name, "dsh-desktop-bridge");
+  assert.equal(manifest.name, "dsh-windows-control");
   assert.equal(manifest.dsh?.bundle?.patch, "./cordis.patch.yml");
   assert.ok(existsSync(join(packageRoot, "cordis.patch.yml")), "patch file must exist");
   assert.equal(manifest.type, "module");
@@ -88,9 +88,9 @@ test("patch mounts exactly the plugin row and the official bridge row", () => {
   assert.equal(insert.insert.length, 2);
 
   const [pluginRow, bridgeRow] = insert.insert;
-  assert.equal(pluginRow.id, "desktop-bridge-plugin");
-  assert.equal(pluginRow.name, "dsh-desktop-bridge");
-  assert.equal(bridgeRow.id, "desktop-bridge-mcp");
+  assert.equal(pluginRow.id, "windows-control-plugin");
+  assert.equal(pluginRow.name, "dsh-windows-control");
+  assert.equal(bridgeRow.id, "windows-control-bridge");
   assert.equal(bridgeRow.name, "@deepseek-ai/dsh-mcp-client", "must reuse the in-box bridge");
 
   const config = bridgeRow.config;
@@ -143,11 +143,11 @@ test("apply never throws, whatever the host context looks like", () => {
 });
 
 test("default export exposes name and apply", () => {
-  assert.equal(plugin.name, "dsh-desktop-bridge");
+  assert.equal(plugin.name, "dsh-windows-control");
   assert.equal(typeof plugin.apply, "function");
 });
 
-test("windows_mcp_doctor registers and produces a usable report", () => {
+test("windows_control_doctor registers and produces a usable report", () => {
   const registered = [];
   apply({
     logger: { warn() {} },
@@ -161,17 +161,17 @@ test("windows_mcp_doctor registers and produces a usable report", () => {
   });
 
   assert.equal(registered.length, 2, "the doctor and the lazy-tool entry are both registered");
-  const definition = registered.find((candidate) => candidate.name === "windows_mcp_doctor");
+  const definition = registered.find((candidate) => candidate.name === "windows_control_doctor");
   assert.ok(definition, "the doctor is registered");
-  assert.equal(definition.name, "windows_mcp_doctor");
+  assert.equal(definition.name, "windows_control_doctor");
   assert.equal(typeof definition.execute, "function");
   assert.equal(definition.parameters.additionalProperties, false);
 
   const output = definition.execute({});
   assert.equal(typeof output.report, "string");
-  assert.match(output.report, /dsh-desktop-bridge \d+\.\d+\.\d+/);
+  assert.match(output.report, /dsh-windows-control \d+\.\d+\.\d+/);
   assert.match(output.report, /uvx\s+:/);
-  assert.match(output.report, /desktop-bridge-mcp/);
+  assert.match(output.report, /windows-control-bridge/);
   assert.match(output.report, /computer use\s+:/);
   assert.match(output.report, /lazy tools\s+:/);
   assert.match(output.report, /verdict {2,}:/);
@@ -184,7 +184,7 @@ test("windows_mcp_doctor registers and produces a usable report", () => {
 });
 
 test("the host registers the Computer Use state route and answers GET", async () => {
-  const home = mkdtempSync(join(tmpdir(), "dsh-desktop-bridge-state-"));
+  const home = mkdtempSync(join(tmpdir(), "dsh-windows-control-state-"));
   process.env.DSH_HOME = home;
   // A fresh module instance (cache-busted) picks up the temporary DSH_HOME.
   const fresh = await import(`../lib/index.js?state-route=${Date.now()}`);
@@ -205,13 +205,13 @@ test("the host registers the Computer Use state route and answers GET", async ()
     },
   });
 
-  const route = routes.get("/dsh-desktop-bridge/state");
+  const route = routes.get("/dsh-windows-control/state");
   assert.ok(route, "the state route must be registered");
   assert.equal(route.kind, "exact");
-  assert.equal(route.path, "/dsh-desktop-bridge/state");
-  assert.ok(routes.has("/dsh-desktop-bridge/prepare"), "the install route must be registered");
-  assert.ok(routes.has("/dsh-desktop-bridge/prepare/cancel"));
-  assert.ok(routes.has("/dsh-desktop-bridge/bridge"));
+  assert.equal(route.path, "/dsh-windows-control/state");
+  assert.ok(routes.has("/dsh-windows-control/prepare"), "the install route must be registered");
+  assert.ok(routes.has("/dsh-windows-control/prepare/cancel"));
+  assert.ok(routes.has("/dsh-windows-control/bridge"));
 
   const get = fakeResponse();
   route.handler({ method: "GET" }, get);
@@ -228,7 +228,7 @@ test("the host registers the Computer Use state route and answers GET", async ()
   route.handler(fakeRequest("POST", '{"enabled":true}'), post);
   assert.equal(post.status, 200);
   assert.equal(JSON.parse(post.body).enabled, true);
-  assert.ok(existsSync(join(home, "dsh-desktop-bridge.state.json")), "the switch is persisted");
+  assert.ok(existsSync(join(home, "dsh-windows-control.state.json")), "the switch is persisted");
 
   const bad = fakeResponse();
   route.handler(fakeRequest("POST", '{"enabled":"yes"}'), bad);
@@ -244,7 +244,7 @@ test("a mutation without the GUI session cookie is refused", async () => {
   // 127.0.0.1 — including the agent itself through a shell. The Host's
   // Connection service mints a signed cookie only through the launch-token
   // exchange, so the routes now demand it for every POST.
-  const home = mkdtempSync(join(tmpdir(), "dsh-desktop-bridge-auth-"));
+  const home = mkdtempSync(join(tmpdir(), "dsh-windows-control-auth-"));
   process.env.DSH_HOME = home;
   const fresh = await import(`../lib/index.js?auth-route=${Date.now()}`);
 
@@ -269,7 +269,7 @@ test("a mutation without the GUI session cookie is refused", async () => {
   });
 
   fresh.apply(makeCtx(false));
-  const route = routes.get("/dsh-desktop-bridge/state");
+  const route = routes.get("/dsh-windows-control/state");
   assert.ok(route, "the state route must be registered");
 
   const read = fakeResponse();
@@ -281,23 +281,23 @@ test("a mutation without the GUI session cookie is refused", async () => {
   assert.equal(refused.status, 401, "no cookie, no switch");
   const refusal = JSON.parse(refused.body);
   assert.match(refusal.error, /DSH window/u);
-  assert.ok(!existsSync(join(home, "dsh-desktop-bridge.state.json")), "a refused write persists nothing");
+  assert.ok(!existsSync(join(home, "dsh-windows-control.state.json")), "a refused write persists nothing");
 
   const settingsRefused = fakeResponse();
-  routes.get("/dsh-desktop-bridge/settings").handler(fakeRequest("POST", '{"settings":{}}'), settingsRefused);
+  routes.get("/dsh-windows-control/settings").handler(fakeRequest("POST", '{"settings":{}}'), settingsRefused);
   assert.equal(settingsRefused.status, 401, "settings writes are gated too");
 
   // Same routes, same body, now with the browser's cookie: allowed.
   routes.clear();
   fresh.apply(makeCtx(true));
   const accepted = fakeResponse();
-  routes.get("/dsh-desktop-bridge/state").handler(fakeRequest("POST", '{"enabled":true}'), accepted);
+  routes.get("/dsh-windows-control/state").handler(fakeRequest("POST", '{"enabled":true}'), accepted);
   assert.equal(accepted.status, 200);
   assert.equal(JSON.parse(accepted.body).enabled, true);
 });
 
 test("lazy tools reveal the desktop capabilities only on demand", async () => {
-  const home = mkdtempSync(join(tmpdir(), "dsh-desktop-bridge-lazy-"));
+  const home = mkdtempSync(join(tmpdir(), "dsh-windows-control-lazy-"));
   process.env.DSH_HOME = home;
   const fresh = await import(`../lib/index.js?lazy=${Date.now()}`);
 
@@ -343,7 +343,7 @@ test("lazy tools reveal the desktop capabilities only on demand", async () => {
   assert.equal(typeof reveal.output.render, "function", "the reveal result is rendered for the transcript");
 
   const enabled = fakeResponse();
-  routes.get("/dsh-desktop-bridge/state").handler(fakeRequest("POST", '{"enabled":true}'), enabled);
+  routes.get("/dsh-windows-control/state").handler(fakeRequest("POST", '{"enabled":true}'), enabled);
   assert.equal(enabled.status, 200);
 
   const alice = { id: "alice" };
@@ -391,7 +391,7 @@ test("lazy tools reveal the desktop capabilities only on demand", async () => {
   assert.match(rendered.map((part) => part.text).join("\n"), /Revealed 2 desktop capability/u);
 
   const disabled = fakeResponse();
-  routes.get("/dsh-desktop-bridge/state").handler(fakeRequest("POST", '{"enabled":false}'), disabled);
+  routes.get("/dsh-windows-control/state").handler(fakeRequest("POST", '{"enabled":false}'), disabled);
   assert.equal(disabled.status, 200);
   const refused = reveal.execute({}, { agent: alice });
   assert.deepEqual(refused.revealed, []);
@@ -400,7 +400,7 @@ test("lazy tools reveal the desktop capabilities only on demand", async () => {
 
 
 test("the Computer Use switch truly hides the bridged tools and refuses them", async () => {
-  const home = mkdtempSync(join(tmpdir(), "dsh-desktop-bridge-gate-"));
+  const home = mkdtempSync(join(tmpdir(), "dsh-windows-control-gate-"));
   process.env.DSH_HOME = home;
   const fresh = await import(`../lib/index.js?gate=${Date.now()}`);
 
@@ -452,7 +452,7 @@ test("the Computer Use switch truly hides the bridged tools and refuses them", a
   // Flip the switch the way the pill does: the reveal entry appears, the
   // eighteen schemas still do not, and dispatch refuses until they are revealed.
   const post = fakeResponse();
-  routes.get("/dsh-desktop-bridge/state").handler(fakeRequest("POST", '{"enabled":true}'), post);
+  routes.get("/dsh-windows-control/state").handler(fakeRequest("POST", '{"enabled":true}'), post);
   assert.equal(post.status, 200);
 
   const onAssembly = await assemble(assembly, {}, next);
@@ -528,11 +528,11 @@ function loadClientBundle() {
 
 test("client bundle declares its id, slot and inject list", () => {
   const { spec, exportsObject } = loadClientBundle();
-  assert.equal(spec.id, "dsh-desktop-bridge");
+  assert.equal(spec.id, "dsh-windows-control");
   assert.equal(typeof exportsObject.apply, "function");
   assert.deepEqual(exportsObject.inject, ["slots"], "only inject the slot service");
   assert.equal(exportsObject.__internals.LABEL, "Computer Use");
-  assert.equal(exportsObject.__internals.apiUrl("/dsh-desktop-bridge/state"), "/dsh-desktop-bridge/state");
+  assert.equal(exportsObject.__internals.apiUrl("/dsh-windows-control/state"), "/dsh-windows-control/state");
 });
 
 test("client bundle registers the composer pill and the Plugins-page slots", () => {
@@ -556,7 +556,7 @@ test("client bundle registers the composer pill and the Plugins-page slots", () 
   for (const slot of ["plugins.bundle.config", "plugins.bundle.activation"]) {
     const entry = registrations.find((candidate) => candidate.meta.name === slot);
     assert.ok(entry, `${slot} must be registered`);
-    assert.equal(entry.meta.key, "dsh-desktop-bridge", `${slot} is keyed by the bundle package name`);
+    assert.equal(entry.meta.key, "dsh-windows-control", `${slot} is keyed by the bundle package name`);
     assert.equal(typeof entry.component, "function");
     assert.ok(injected.includes(slot), `${slot} must be declared through slots.inject`);
   }
@@ -588,12 +588,12 @@ test("the pill is an accessible switch", () => {
   const wrapper = registration.component({ sessionId: "session-1" });
   const cell = wrapper.type(wrapper.props);
   assert.equal(cell.type, "div", "the cell wraps the pill so it can also host the dialog");
-  assert.equal(cell.props.className, "dwmc-host");
+  assert.equal(cell.props.className, "dwc-host");
   const pillElement = cell.children[0];
   const pill = pillElement.type(pillElement.props);
   assert.equal(pill.type, "button");
   assert.equal(pill.props.role, "switch");
-  assert.equal(pill.props.className, "dwmc-pill");
+  assert.equal(pill.props.className, "dwc-pill");
   assert.equal(pill.props["aria-checked"], false, "defaults to off while loading");
   assert.equal(pill.props["data-state"], "off");
   assert.equal(typeof pill.props.title, "string");
@@ -614,16 +614,16 @@ test("the plugin card points at the settings page instead of duplicating the ins
   const note = registrations.find((entry) => entry.meta.name === "plugins.bundle.config").component;
   const rendered = note({});
   assert.equal(rendered.type, "section");
-  assert.equal(rendered.props.className, "dwmc-panel");
+  assert.equal(rendered.props.className, "dwc-panel");
   assert.ok(Array.isArray(rendered.children) && rendered.children.length >= 2, "status head and a pointer note");
-  const pointer = rendered.children.find((child) => child && child.props && child.props.className === "dwmc-note");
+  const pointer = rendered.children.find((child) => child && child.props && child.props.className === "dwc-note");
   assert.ok(pointer, "the plugin card carries a pointer note");
   assert.equal(typeof pointer.children[0], "string", "the pointer is a single localized sentence");
 
   // The panel body doubles as the Dependency card of the settings page.
   const embedded = exportsObject.__internals.WindowsMcpPanel({ __embedded: true });
   assert.equal(embedded.type, "div");
-  assert.equal(embedded.props.className, "dwmc-dep");
+  assert.equal(embedded.props.className, "dwc-dep");
   assert.ok(Array.isArray(embedded.children) && embedded.children.length >= 2, "rows and actions, without the panel head");
 
   const compact = registrations.find((entry) => entry.meta.name === "plugins.bundle.activation").component;
@@ -640,12 +640,12 @@ test("client styles keep the pill unfilled and use theme tokens only", () => {
   assert.match(css, /--dsw-alias-state-warn-primary/u);
   assert.match(css, /--dsw-alias-state-idle-primary/u);
 
-  const onRule = /\.dwmc-pill\[data-state='on'\][^{]*\{[^}]*\}/u.exec(css);
+  const onRule = /\.dwc-pill\[data-state='on'\][^{]*\{[^}]*\}/u.exec(css);
   assert.ok(onRule, "the on state must be styled");
   assert.ok(!/background:color-mix/u.test(onRule[0]), "the on pill must not fill with colour");
   assert.ok(!/border:/u.test(onRule[0]), "the on pill must not gain a border");
 
-  const baseRule = /\.dwmc-pill\{[^}]*\}/u.exec(css);
+  const baseRule = /\.dwc-pill\{[^}]*\}/u.exec(css);
   assert.ok(baseRule, "the pill base rule must exist");
   assert.ok(!/border:\s*1px/u.test(baseRule[0]), "the pill is borderless");
   assert.ok(!/#[0-9a-fA-F]{3,8}\b/u.test(css), "no literal colours, the theme must supply them");
@@ -654,13 +654,13 @@ test("client styles keep the pill unfilled and use theme tokens only", () => {
 test("client bundle registers the settings page with a star link", () => {
   const { exportsObject } = loadClientBundle();
   assert.equal(exportsObject.__internals.SETTINGS_SLOT, "settings.section");
-  assert.equal(exportsObject.__internals.SETTINGS_PATH, "/dsh-desktop-bridge/settings");
-  assert.equal(exportsObject.__internals.REPO_URL, "https://github.com/xkzm123/dsh-desktop-bridge");
+  assert.equal(exportsObject.__internals.SETTINGS_PATH, "/dsh-windows-control/settings");
+  assert.equal(exportsObject.__internals.REPO_URL, "https://github.com/xkzm123/dsh-windows-control");
   const navIcon = exportsObject.__internals.SETTINGS_NAV_ICON;
   assert.ok(navIcon.startsWith('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"'), "the mask glyph is a 16px viewBox svg");
   assert.match(navIcon, /fill-rule="evenodd"/u);
   assert.ok(navIcon.endsWith("</svg>"), "the mask glyph is closed");
-  assert.equal(exportsObject.__internals.SETTINGS_NAV_ICON_MARKER, "data-dwmc-nav-icon");
+  assert.equal(exportsObject.__internals.SETTINGS_NAV_ICON_MARKER, "data-dwc-nav-icon");
   const isOwn = exportsObject.__internals.isOwnSettingsNavRow;
   assert.equal(isOwn("桌面控制", "桌面控制"), true);
   assert.equal(isOwn("  Desktop  ", "Desktop"), true);
@@ -672,14 +672,14 @@ test("client bundle registers the settings page with a star link", () => {
   assert.ok(maskUrl.includes("%3Csvg"), "the svg is percent-encoded for a CSS url()");
   assert.ok(!maskUrl.includes("'"), "the url never breaks out of url('…')");
   const iconCss = exportsObject.__internals.settingsNavIconCss(maskUrl);
-  assert.ok(iconCss.includes("[data-dwmc-nav-icon] > svg{display:none}"));
-  assert.ok(iconCss.includes("[data-dwmc-nav-icon]::before"));
+  assert.ok(iconCss.includes("[data-dwc-nav-icon] > svg{display:none}"));
+  assert.ok(iconCss.includes("[data-dwc-nav-icon]::before"));
   assert.ok(iconCss.includes("background-color:currentColor"));
   assert.ok(iconCss.includes("mask-image:url('data:image/svg+xml,"));
   assert.ok(iconCss.includes("width:16px;height:16px"));
   assert.ok(!/#[0-9a-f]{3}/iu.test(iconCss), "the glyph takes its colour from currentColor");
 
-  assert.ok(exportsObject.__internals.CSS.includes(".dwmc-dep{"), "the embedded panel has its own layout hook");
+  assert.ok(exportsObject.__internals.CSS.includes(".dwc-dep{"), "the embedded panel has its own layout hook");
 
   const registrations = [];
   exportsObject.apply({
@@ -704,9 +704,9 @@ test("client bundle registers the settings page with a star link", () => {
 test("the welcome dialog is a portal modal that fires on activation", () => {
   const { exportsObject } = loadClientBundle();
   const internals = exportsObject.__internals;
-  assert.equal(internals.WELCOME_STORAGE_KEY, "dsh-desktop-bridge:welcome");
-  assert.equal(internals.WELCOME_PENDING_KEY, "dsh-desktop-bridge:welcome-pending");
-  assert.equal(internals.WELCOME_EVENT, "dsh-desktop-bridge:welcome");
+  assert.equal(internals.WELCOME_STORAGE_KEY, "dsh-windows-control:welcome");
+  assert.equal(internals.WELCOME_PENDING_KEY, "dsh-windows-control:welcome-pending");
+  assert.equal(internals.WELCOME_EVENT, "dsh-windows-control:welcome");
   assert.equal(typeof internals.requestWelcome, "function");
   assert.equal(typeof internals.WelcomeDialog, "function");
   assert.equal(typeof internals.WelcomeHost, "function");
@@ -714,15 +714,15 @@ test("the welcome dialog is a portal modal that fires on activation", () => {
   assert.equal(internals.WELCOME_PORTAL, false, "no react-dom in this sandbox: the in-place fallback is used");
 
   const css = internals.CSS;
-  assert.ok(css.includes(".dwmc-scrim{"), "the scrim is its own layer");
+  assert.ok(css.includes(".dwc-scrim{"), "the scrim is its own layer");
   assert.ok(css.includes("--dsw-alias-bg-mask-1"), "the scrim takes the shell's mask colour");
   assert.ok(css.includes("--dsw-mask-blur"), "the scrim takes the shell's blur");
-  assert.ok(css.includes(".dwmc-dialog{"), "the card is styled");
+  assert.ok(css.includes(".dwc-dialog{"), "the card is styled");
   assert.ok(css.includes("background:color-mix(in srgb,var(--dsw-alias-bg-layer-2) 70%,transparent)"), "the card is a glass sheet");
   assert.ok(css.includes("backdrop-filter:blur(18px) saturate(155%)"), "the card frosted");
-  assert.ok(css.includes("@keyframes dwmc-fadein"), "the scrim fades in");
-  assert.ok(css.includes("@keyframes dwmc-rise"), "the card rises in");
-  assert.ok(css.includes(".dwmc-star--hero{"), "the welcome star is the prominent variant");
+  assert.ok(css.includes("@keyframes dwc-fadein"), "the scrim fades in");
+  assert.ok(css.includes("@keyframes dwc-rise"), "the card rises in");
+  assert.ok(css.includes(".dwc-star--hero{"), "the welcome star is the prominent variant");
 
   const source = readFileSync(new URL("../lib/client.js", import.meta.url), "utf8");
   assert.ok(source.includes('require("react-dom")'), "react-dom is tried for the portal");
@@ -754,14 +754,14 @@ test("the machine-written block is idempotent and keeps the rest of the file", (
   const twice = withBridgeOverride(once, bridgeOverrideBlock("D:\\other\\windows-mcp.exe", { stamp: "2026-01-02T00:00:00.000Z", version: "0.1.0" }));
 
   assert.ok(once.includes("agent-default-model"), "existing rows survive a write");
-  assert.equal(twice.split(">>> dsh-desktop-bridge").length - 1, 1, "only one machine block remains");
+  assert.equal(twice.split(">>> dsh-windows-control").length - 1, 1, "only one machine block remains");
   assert.ok(twice.includes("D:\\other\\windows-mcp.exe"));
   assert.ok(!twice.includes("C:\\uv\\windows-mcp.exe"), "the previous block is replaced, not stacked");
 
   if (yaml !== null) {
     const parsed = yaml.load(twice);
     assert.ok(Array.isArray(parsed), "the result must stay a top-level list");
-    const row = parsed.find((entry) => entry?.id === "desktop-bridge-mcp");
+    const row = parsed.find((entry) => entry?.id === "windows-control-bridge");
     assert.ok(row, "the override row must parse");
     assert.equal(row.disabled, false, "the machine block re-enables the row the bundle patch ships inert");
     assert.equal(row.config.command, "D:\\other\\windows-mcp.exe");
@@ -771,9 +771,9 @@ test("the machine-written block is idempotent and keeps the rest of the file", (
 });
 
 test("writeBridgeOverride finds the profile, backs it up and writes the row", () => {
-  const home = mkdtempSync(join(tmpdir(), "dsh-desktop-bridge-home-"));
+  const home = mkdtempSync(join(tmpdir(), "dsh-windows-control-home-"));
   const profile = join(home, "profiles", "desktop");
-  mkdirSync(join(profile, "node_modules", "dsh-desktop-bridge"), { recursive: true });
+  mkdirSync(join(profile, "node_modules", "dsh-windows-control"), { recursive: true });
   const patchFile = join(profile, "cordis.patch.yml");
   writeFileSync(patchFile, "- id: bili-native\n  disabled: false\n", "utf8");
   const executable = join(home, "windows-mcp.exe");
@@ -787,13 +787,13 @@ test("writeBridgeOverride finds the profile, backs it up and writes the row", ()
   assert.ok(written.includes("bili-native"), "existing rows survive");
   assert.ok(written.includes("machine written"));
   if (yaml !== null) {
-    const row = yaml.load(written).find((entry) => entry?.id === "desktop-bridge-mcp");
+    const row = yaml.load(written).find((entry) => entry?.id === "windows-control-bridge");
     assert.equal(row.config.command, executable);
   }
 
   const again = writeBridgeOverride(executable, { home, warn() {}, version: "0.1.0" });
   assert.equal(again.ok, true);
-  assert.equal(readFileSync(patchFile, "utf8").split(">>> dsh-desktop-bridge").length - 1, 1, "still one block");
+  assert.equal(readFileSync(patchFile, "utf8").split(">>> dsh-windows-control").length - 1, 1, "still one block");
 
   const nowhere = writeBridgeOverride(executable, { home: mkdtempSync(join(tmpdir(), "dsh-empty-profile-")), warn() {} });
   assert.equal(nowhere.ok, false);
@@ -809,7 +809,7 @@ test("the profile writer prefers the profile this host booted", () => {
   writeFileSync(executable, "", "utf8");
   for (const name of ["alpha", "beta"]) {
     const profile = join(home, "profiles", name);
-    mkdirSync(join(profile, "node_modules", "dsh-desktop-bridge"), { recursive: true });
+    mkdirSync(join(profile, "node_modules", "dsh-windows-control"), { recursive: true });
     writeFileSync(join(profile, "cordis.patch.yml"), "- id: bili-native\n  disabled: false\n", "utf8");
   }
   const booted = join(home, "profiles", "beta");
@@ -849,7 +849,7 @@ test("the profile writer prefers the profile this host booted", () => {
     false,
     "the other candidate is untouched",
   );
-  assert.equal(readFileSync(join(booted, "cordis.patch.yml"), "utf8").split(">>> dsh-desktop-bridge").length - 1, 1, "the earlier write is not repeated");
+  assert.equal(readFileSync(join(booted, "cordis.patch.yml"), "utf8").split(">>> dsh-windows-control").length - 1, 1, "the earlier write is not repeated");
 
   // A booted profile outside this home must not leak past the `home` argument.
   const elsewhere = writeBridgeOverride(executable, {

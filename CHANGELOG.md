@@ -4,6 +4,33 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- **Renamed to `dsh-windows-control`.** Package name, loader row ids
+  (`windows-control-plugin`, `windows-control-bridge`), route prefix
+  (`/dsh-windows-control/*`), state/settings/versions file names and the
+  `windows_control_doctor` tool all moved together. Rename history and the
+  upstream MIT notice are recorded in `NOTICE`.
+- CSS class prefix `dwmc-` -> `dwc-`.
+
+### Added
+
+- `lib/fastpath.js` + `tools/fastpath-host.ps1`: a long-lived, DPI-correct
+  Win32 sidecar (JSON-lines over stdio) for the ops the MCP bridge answers
+  badly — window enumeration with physical-pixel rects, focus, launch-and-wait,
+  SendInput clicks/keys, pixel probe, predicate wait.
+  **Not wired yet**: the host aborts on startup (`$stdout.AutoFlush` does not
+  exist in PowerShell) and no tool registers it, so it is inert.
+
+### Measured (Windows 11, windows-mcp 0.8.8)
+
+- `Snapshot` (whole-desktop UIA walk): 26.06s cold, 27.24s warm, 0 elements for
+  an SDL/OpenGL game window.
+- `EnumWindows` + `GetWindowRect` over the same 18 windows: 2ms.
+- `Screenshot`: 0.23-0.79s. `Click`: 0.57s. `USER_CONTROL` lockout: up to 10s.
+
 ## [0.2.3] - 2026-11-03
 
 ### Added
@@ -63,7 +90,7 @@ All notable changes to this project are documented here. The format follows
 - The machine-written profile block now restates `disabled: false`. Without it
   the block would override `config` while the bundle layer's `disabled: true`
   stayed in effect, leaving a profile with no Windows tools at all.
-- `windows_mcp_doctor` and the startup audit now explain this sequence, and the
+- `windows_control_doctor` and the startup audit now explain this sequence, and the
   boot warnings no longer claim `uv`/`uvx` is needed to *start* the bridge (it is
   only needed to install the dependency).
 
@@ -97,7 +124,7 @@ All notable changes to this project are documented here. The format follows
   **Bridge** (`toolCallTimeoutMs`, screenshot scale/backend, flash overlay,
   the excludable tools), **Updates** (check on boot, preferred mirror) and
   **About** (version, repository, a **Star** button). Values are validated and
-  clamped, stored atomically in `$DSH_HOME/dsh-desktop-bridge.settings.json`, and
+  clamped, stored atomically in `$DSH_HOME/dsh-windows-control.settings.json`, and
   bridge changes are written into the profile's bridge row with a backup; the
   page reports when a restart is needed.
 - `preferredMirror`: the update check can pin a mirror while `auto` keeps the
@@ -118,12 +145,12 @@ All notable changes to this project are documented here. The format follows
 
 - **Windows-MCP version management** (`lib/updater.js`, `lib/installs.js`): the
   plugin checks the mirrors for the newest stable `windows-mcp`, installs a
-  version **side by side** under `$DSH_HOME/dsh-desktop-bridge/toolchain/<version>`
+  version **side by side** under `$DSH_HOME/dsh-windows-control/toolchain/<version>`
   (each version its own `UV_TOOL_DIR`, so nothing is overwritten), rewrites the
   bridge row to the freshly installed executable, and keeps the replaced version
   so **Roll back** switches back to it without downloading anything. The check
   result, active/previous version and the install history are persisted in
-  `$DSH_HOME/dsh-desktop-bridge.versions.json`. Checks run on boot and are cached
+  `$DSH_HOME/dsh-windows-control.versions.json`. Checks run on boot and are cached
   for six hours.
 - **Fast-mirror selection for the Python dependency** (`lib/mirrors.js`,
   `lib/pypi.js`): PyPI plus the USTC, Aliyun, Tencent Cloud, Huawei Cloud,
@@ -168,13 +195,13 @@ All notable changes to this project are documented here. The format follows
   ships shell and file tools, and upstream only supports the App tool reliably
   on English Windows), telemetry disabled, screenshot flash disabled,
   screenshots downscaled to 0.75, 120 s per-call timeout, reconnect enabled.
-- Host half (`lib/index.js`) with a `windows_mcp_doctor` diagnostic tool and a
+- Host half (`lib/index.js`) with a `windows_control_doctor` diagnostic tool and a
   single-warning startup audit (missing patch row, missing `uv`/`uvx`).
 - Zero runtime dependencies; `js-yaml` is a dev dependency used only by tests
   to parse the patch file for real.
 - A **Computer Use** switch in the composer tool row (client half,
   `lib/client.js`): renders the number of bridged desktop tools and persists the
-  choice in `~/.dsh/dsh-desktop-bridge.state.json`. It is **off by default** —
+  choice in `~/.dsh/dsh-windows-control.state.json`. It is **off by default** —
   desktop control is opt-in, so a fresh install does not hand the agent the
   machine until the switch is turned on.
 - Hard enforcement of that switch (host half): while it is off, every

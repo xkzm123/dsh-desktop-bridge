@@ -1,8 +1,8 @@
 <div align="center">
-  <img src="assets/banner.svg" alt="dsh-desktop-bridge" width="100%">
+  <img src="assets/banner.svg" alt="dsh-windows-control" width="100%">
 </div>
 
-<h1 align="center">dsh-desktop-bridge</h1>
+<h1 align="center">dsh-windows-control</h1>
 
 <p align="center">
   <b>把 Windows 桌面交给 agent，但由你说了算。</b><br>
@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/xkzm123/dsh-desktop-bridge/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/xkzm123/dsh-desktop-bridge/actions/workflows/ci.yml/badge.svg"></a>
+  <a href="https://github.com/xkzm123/dsh-windows-control/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/xkzm123/dsh-windows-control/actions/workflows/ci.yml/badge.svg"></a>
   <img alt="license" src="https://img.shields.io/badge/license-MIT-3da639?style=flat-square">
   <img alt="node" src="https://img.shields.io/badge/node-%E2%89%A522-339933?style=flat-square">
   <img alt="platform" src="https://img.shields.io/badge/platform-Windows%2010%20%2F%2011-0078D4?style=flat-square">
@@ -29,7 +29,7 @@
 
 DeepSeek Harness 的 agent 能读文件、跑命令，但它看不见你的屏幕。
 
-**dsh-desktop-bridge** 补上这一段：它把 [CursorTouch/Windows-MCP](https://github.com/CursorTouch/Windows-MCP) 接进 DSH，于是模型可以截一张屏、找到那个按钮、点下去、把结果读回来——真实窗口、真实鼠标、真实键盘。
+**dsh-windows-control** 补上这一段：它把 [CursorTouch/Windows-MCP](https://github.com/CursorTouch/Windows-MCP) 接进 DSH，于是模型可以截一张屏、找到那个按钮、点下去、把结果读回来——真实窗口、真实鼠标、真实键盘。
 
 它不是一个新写的 MCP 客户端。DSH 内部本来就带着官方的 MCP 桥（`@deepseek-ai/dsh-mcp-client`），这个插件只做四件桥做不到的事：**把开关交给人、把依赖装好、把版本管住、把参数摊开**。
 
@@ -83,6 +83,41 @@ DeepSeek Harness 的 agent 能读文件、跑命令，但它看不见你的屏�
 
 ---
 
+## 为什么叫 `control` 而不是 `mcp`
+
+改名之前它叫 `dsh-windows-mcp`（上游）／`dsh-desktop-bridge`（第一次 fork）。两个名字都在描述"把 Windows-MCP 接进来"这件事——那是它的历史，不是它现在卖的东西。
+
+实测一台 Windows 11 + `windows-mcp` 0.8.8 的机器上，用这个插件去开一个游戏窗口并点进关卡：
+
+| 动作 | 走桥 | 实测 |
+| --- | --- | --- |
+| 问"桌面上有什么窗口、各自的矩形" | `Snapshot`（UIA 全桌面遍历） | **26.06s**，预热后第二次 **27.24s**，对 SDL/OpenGL 窗口返回 0 个元素 |
+| 同样的窗口枚举 | `EnumWindows` + `GetWindowRect` | **2ms** |
+| 每次调用前的控制权仲裁 | `ControlStatus` 返回 `USER_CONTROL` | 最多 **10s** 拒绝一切桌面调用 |
+| 起进程并等到窗口出现 | 没有原语（`App` 默认被排除，`Process` 只能 list/kill） | 只能靠 shell 轮询 |
+
+所以这个仓库除了接线，还要自己持有一条**原生 Win32 快通道**：窗口几何、启动、注入、取色。名字跟着职责走。
+
+`mcp__windows__*` 那 18 个工具仍然在，一行都没改——`Snapshot` 在真有无障碍元素的窗口（浏览器、原生控件、设置页）上依然值得那 26 秒。快通道只接管它答不好的那部分。
+
+---
+
+## 快通道（WIP）
+
+`lib/fastpath.js` + `tools/fastpath-host.ps1`：一个常驻的 PowerShell JSON-lines 宿主，声明 Per-Monitor V2 DPI，直接调 Win32。
+
+| op | 用途 | 典型耗时 |
+| --- | --- | --- |
+| `windows` / `rect` | 可见顶层窗口 + 物理像素矩形（与 `Click` 同一坐标系） | 2–30ms |
+| `focus` | 激活窗口（含 AttachThreadInput 兜底） | ~120ms |
+| `launch` | 起进程 → 等窗口 → 回矩形，一条调用 | 进程启动时间 |
+| `click` / `move` / `key` / `type` | SendInput 绝对坐标（虚拟桌面），不经控制闸门 | 40–80ms |
+| `pixel` / `wait` | 取色 / 等窗口或等像素，替掉"再截一张图" | 30–80ms |
+
+**状态：尚未接线。** 宿主目前启动即崩（`$stdout.AutoFlush` 在 PowerShell 里不存在），修复后再在 `lib/index.js` 注册 `windows_fast` 工具。在那之前它不参与任何运行路径。
+
+---
+
 ## 三分钟上手
 
 ### 1. 装 uv（Python 包管理器）
@@ -98,13 +133,13 @@ winget install --id=astral-sh.uv -e
 在 **DSH Desktop → 设置 → 插件** 里添加这个 bundle，填仓库地址：
 
 ```
-github:xkzm123/dsh-desktop-bridge
+github:xkzm123/dsh-windows-control
 ```
 
 非 Electron 的 profile 也可以用命令行：
 
 ```powershell
-dsh plugin --profile <profile> add github:xkzm123/dsh-desktop-bridge
+dsh plugin --profile <profile> add github:xkzm123/dsh-windows-control
 ```
 
 装完**重启 DSH**，让新的 patch 层在启动时生效。
@@ -153,7 +188,7 @@ dsh plugin --profile <profile> add github:xkzm123/dsh-desktop-bridge
 | 首选镜像 | `auto` | 也可以固定 USTC / 阿里云 / 腾讯云 / 华为云 / 南京大学 / 清华 TUNA / PyPI |
 | 惰性工具 | 开 | 平时只给模型一个入口，调用后才下发工具定义 |
 
-设置写在 `$DSH_HOME/dsh-desktop-bridge.settings.json`，原子写入；越界的值会被夹回默认并明确告诉你，不会静默写坏。
+设置写在 `$DSH_HOME/dsh-windows-control.settings.json`，原子写入；越界的值会被夹回默认并明确告诉你，不会静默写坏。
 
 ---
 
@@ -199,7 +234,7 @@ sequenceDiagram
 
 三条，按重要性排：
 
-1. **默认关闭，且关闭是真的关闭。** 工具既不出现在工具表，调用也会被 dispatch guard 拦下。开关状态存在 `$DSH_HOME/dsh-desktop-bridge.state.json`，重启不丢。
+1. **默认关闭，且关闭是真的关闭。** 工具既不出现在工具表，调用也会被 dispatch guard 拦下。开关状态存在 `$DSH_HOME/dsh-windows-control.state.json`，重启不丢。
 2. **改开关必须来自 DSH 窗口。** 所有写操作（开关、安装、更新、设置）都要求带 GUI 的签名 session cookie——模型就算有 shell 权限，也没法给自己开桌面控制。拿不到 `connection` 服务的部署会在 `/state` 里报 `gate: unobservable`，不会假装安全。
 3. **不回家。** 上游默认开 PostHog 遥测，插件在桥的行里写死 `ANONYMIZED_TELEMETRY=false`。
 
@@ -228,7 +263,7 @@ sequenceDiagram
 截屏和 `WaitFor` 本来就慢。把 `工具调用超时` 往上调（最大 600000），比反复重试划算。
 
 **想彻底停用**
-关掉 Computer Use 就够了——工具对模型不可见。想连依赖一起清掉：`uv tool uninstall windows-mcp`，再删掉 `$DSH_HOME/dsh-desktop-bridge/toolchain`。
+关掉 Computer Use 就够了——工具对模型不可见。想连依赖一起清掉：`uv tool uninstall windows-mcp`，再删掉 `$DSH_HOME/dsh-windows-control/toolchain`。
 
 ---
 

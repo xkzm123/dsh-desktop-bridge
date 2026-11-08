@@ -68,7 +68,7 @@ const MIRRORS = [
 ];
 
 function temporaryHome() {
-  return mkdtempSync(join(tmpdir(), "dwmc-update-home-"));
+  return mkdtempSync(join(tmpdir(), "dwc-update-home-"));
 }
 
 /** Create the on-disk shape `uv tool install` leaves for one managed version. */
@@ -203,7 +203,7 @@ test("every managed version gets its own tool root, so a rollback needs no downl
   const home = temporaryHome();
   try {
     const root = managedToolchainRoot(home);
-    assert.equal(root, join(home, "dsh-desktop-bridge", "toolchain"));
+    assert.equal(root, join(home, "dsh-windows-control", "toolchain"));
     assert.equal(versionToolRoot(root, "0.8.8"), join(root, "0.8.8"));
     assert.equal(versionToolRoot(root, "0.8.8"), join(root, "0.8.8"));
     assert.equal(toolDirectoryFor(root, "0.8.8"), join(root, "0.8.8", "windows-mcp"));
@@ -290,7 +290,7 @@ test("the manager checks the mirrors once, then installs, activates and rolls ba
 
     assert.equal(updater.view().check.phase, "idle");
     assert.equal(updater.view().install.phase, "idle");
-    assert.equal(UPDATE_ROUTE, "/dsh-desktop-bridge/update");
+    assert.equal(UPDATE_ROUTE, "/dsh-windows-control/update");
 
     const checked = await updater.check({ force: true });
     assert.equal(checked.check.phase, "ok");
@@ -402,7 +402,7 @@ test("spawnUvInstall passes the chosen mirror and streams output", async () => {
     uv: process.execPath,
     spec: "windows-mcp@0.8.8",
     indexUrl: "https://fast.example/simple",
-    toolDirectory: join(tmpdir(), "dwmc-args"),
+    toolDirectory: join(tmpdir(), "dwc-args"),
   });
   assert.deepEqual(started.args, ["tool", "install", "--force", "--default-index", "https://fast.example/simple", "windows-mcp@0.8.8"]);
   await new Promise((resolve) => started.child.on("close", resolve));
@@ -413,7 +413,7 @@ test("spawnUvInstall passes the chosen mirror and streams output", async () => {
 });
 
 test("createPrepare streams the mirror and the managed tool directory", async () => {
-  const toolDirectory = join(tmpdir(), "dwmc-prepare-toolroot");
+  const toolDirectory = join(tmpdir(), "dwc-prepare-toolroot");
   const prepare = createPrepare({
     warn: () => {},
     resolver: () => process.execPath,
