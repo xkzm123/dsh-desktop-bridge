@@ -1,161 +1,54 @@
-<div align="center">
-  <img src="assets/banner.svg" alt="dsh-windows-control" width="100%">
-</div>
+# dsh-windows-control
 
-<h1 align="center">dsh-windows-control</h1>
+[![CI](https://github.com/xkzm123/dsh-windows-control/actions/workflows/ci.yml/badge.svg)](https://github.com/xkzm123/dsh-windows-control/actions/workflows/ci.yml)
+[![License](https://img.shields.io/badge/license-MIT-lightgrey.svg)](LICENSE)
+![Node](https://img.shields.io/badge/node-%E2%89%A522-lightgrey.svg)
 
-<p align="center">
-  <b>把 Windows 桌面交给 agent，但由你说了算。</b><br>
-  截屏 · 点击 · 输入 · 快捷键 · 剪贴板 · 进程 · 注册表 —— 默认关闭，随时一键开启。
-</p>
+给 [DeepSeek Harness](https://github.com/sandbaseai/deepseek-harness-handbook) 的 Windows 桌面控制。
 
-<p align="center">
-  <a href="https://github.com/xkzm123/dsh-windows-control/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/xkzm123/dsh-windows-control/actions/workflows/ci.yml/badge.svg"></a>
-  <img alt="license" src="https://img.shields.io/badge/license-MIT-3da639?style=flat-square">
-  <img alt="node" src="https://img.shields.io/badge/node-%E2%89%A522-339933?style=flat-square">
-  <img alt="platform" src="https://img.shields.io/badge/platform-Windows%2010%20%2F%2011-0078D4?style=flat-square">
-</p>
+两条通道：**官方 MCP 桥**把 [CursorTouch/Windows-MCP](https://github.com/CursorTouch/Windows-MCP) 的 18 个工具接进来，负责"看见"；**原生 Win32 快通道**自己算窗口几何、起进程、点下去，负责"动手"。
 
-<p align="center">
-  <a href="#它能做什么">它能做什么</a> ·
-  <a href="#三分钟上手">快速开始</a> ·
-  <a href="#配置">配置</a> ·
-  <a href="#常见问题">常见问题</a>
-</p>
+[安装](#安装) · [用法](#用法) · [实测](#实测) · [原理](#原理) · [限制](#限制)
 
 ---
 
 ## 这是什么
 
-DeepSeek Harness 的 agent 能读文件、跑命令，但它看不见你的屏幕。
+装上之后，模型在工具表里会多出两批东西：
 
-**dsh-windows-control** 补上这一段：它把 [CursorTouch/Windows-MCP](https://github.com/CursorTouch/Windows-MCP) 接进 DSH，于是模型可以截一张屏、找到那个按钮、点下去、把结果读回来——真实窗口、真实鼠标、真实键盘。
-
-它不是一个新写的 MCP 客户端。DSH 内部本来就带着官方的 MCP 桥（`@deepseek-ai/dsh-mcp-client`），这个插件只做四件桥做不到的事：**把开关交给人、把依赖装好、把版本管住、把参数摊开**。
-
-> 桌面控制是**默认关闭**的。装完插件、装好依赖，你不点那个开关，模型连工具名都看不见。
-
----
-
-## 它能做什么
-
-装上之后，工具表里会出现 18 个 `mcp__windows__*` 工具：
-
-| 分类 | 工具 | 干什么 |
+| 批次 | 工具 | 来自 |
 | --- | --- | --- |
-| **看** | `Screenshot` `Snapshot` | 截屏，附带光标位置、窗口列表、屏幕尺寸 |
-| | `DisplayInventory` | 多显示器布局与 DPI |
-| | `Scrape` | 抓一个网页的正文 |
-| **操作** | `Click` `Move` `Scroll` | 按坐标或按控件名点击、移动、拖拽、滚轮 |
-| | `Type` `MultiEdit` | 输入文本、批量填表 |
-| | `MultiSelect` | 多选文件 / 复选框 |
-| | `Shortcut` | `ctrl+c` 这类组合键 |
-| **等** | `Wait` `WaitFor` | 等固定秒数，或等某个 UI 条件成立 |
-| **系统** | `Clipboard` | 读写剪贴板 |
-| | `Process` | 列进程、结束进程 |
-| | `Registry` | 读写注册表 |
-| | `Notification` | 弹一个系统通知 |
-| | `ControlStatus` | 当前桌面控制归属与用户空闲时长 |
+| 桥接 | `mcp__windows__Screenshot` / `Snapshot` / `Click` / `Type` / `Clipboard` / `Registry` … 共 18 个 | Windows-MCP，经 DSH 自带的 MCP 客户端 |
+| 原生 | `windows_fast`、`windows_run` | 本仓库，`lib/fastpath.js` + `tools/fastpath-host.ps1` |
 
-典型用法：
+本仓库不实现 MCP 协议，也不打包 MCP SDK。桥是 DSH 本体的一部分（`@deepseek-ai/dsh-mcp-client`，在 `app.asar` 里），这里只负责挂载它、装它的依赖、给它一条更快的旁路。
 
-- 「打开设置，把缩放调到 125%」——截屏 → 找到入口 → 点击 → 再截屏确认
-- 「把这张表从网页抄进 Excel」——`Scrape` 取数 → `MultiEdit` 批量填
-- 「看看是哪个进程占了 CPU」——`Process` 列表 + `Notification` 汇报
-- 「帮我把这段文字复制到微信」——`Clipboard` 写入 → 切窗口 → `Shortcut` 粘贴
+## 为什么需要第二条通道
 
----
+拿一个真实窗口试出来的。Windows 11 + `windows-mcp` 0.8.8，用这个插件驱动 Kingdom Rush Origins（LÖVE/SDL + OpenGL，自绘界面，没有任何无障碍节点）：
 
-## 为什么不是"又一个 MCP 客户端"
-
-<div align="center">
-  <img src="assets/architecture.svg" alt="架构图：DSH Agent → 工具表 → 官方 MCP 桥 → windows-mcp.exe → Windows 桌面" width="100%">
-</div>
-
-左边是调用链，一条都不归这个仓库管：模型发调用、官方桥走 stdio、`windows-mcp.exe` 用 UI Automation 和 Win32 干活。
-
-右边四件事才是这个插件存在的理由：
-
-- **开关归人。** 桌面控制的开启/关闭是一条 HTTP 路由，写入 `$DSH_HOME`，重启后仍在。关闭时工具从模型的工具表里消失，硬调用也会被 dispatch guard 拒绝——不是"提示一下"，是拿不到。
-- **依赖自己装。** Windows-MCP 是个 Python 程序。插件在 7 个 PyPI 镜像之间测速择优，装完自动把桥指向装好的 exe，**下次开机不再碰网络**。
-- **版本互不覆盖。** 每个版本装在 `toolchain/<version>/` 下，切换只是改写一行配置，回退不下载任何东西。
-- **参数摊开。** 超时、截图缩放、截图后端、要屏蔽哪些工具、用哪个镜像、要不要惰性工具——都在设置页里，不用手改 YAML。
-
----
-
-## 为什么叫 `control` 而不是 `mcp`
-
-改名之前它叫 `dsh-windows-mcp`（上游）／`dsh-desktop-bridge`（第一次 fork）。两个名字都在描述"把 Windows-MCP 接进来"这件事——那是它的历史，不是它现在卖的东西。
-
-实测一台 Windows 11 + `windows-mcp` 0.8.8 的机器上，用这个插件去开一个游戏窗口并点进关卡：
-
-| 动作 | 走桥 | 实测 |
+| 要做的事 | 走桥 | 实测 |
 | --- | --- | --- |
-| 问"桌面上有什么窗口、各自的矩形" | `Snapshot`（UIA 全桌面遍历） | **26.06s**，预热后第二次 **27.24s**，对 SDL/OpenGL 窗口返回 0 个元素 |
-| 同样的窗口枚举 | `EnumWindows` + `GetWindowRect` | **2ms** |
-| 每次调用前的控制权仲裁 | `ControlStatus` 返回 `USER_CONTROL` | 最多 **10s** 拒绝一切桌面调用 |
-| 起进程并等到窗口出现 | 没有原语（`App` 默认被排除，`Process` 只能 list/kill） | 只能靠 shell 轮询 |
+| 桌面上有哪些窗口、各自在哪 | `Snapshot`（整桌面 UIA 遍历） | **26.06 s**，预热后第二次 **27.24 s**，对 SDL 窗口返回 0 个元素 |
+| 同样这批窗口 | `EnumWindows` + `GetWindowRect` | **2 ms** |
+| 起一个进程并等它的窗口 | 没有这个能力（`App` 默认被排除，`Process` 只能 list/kill） | 只能自己写 shell 轮询 |
+| 每次调用前的控制权仲裁 | `ControlStatus` | 返回 `USER_CONTROL` 时，**最多 10 s** 拒绝一切桌面调用 |
 
-所以这个仓库除了接线，还要自己持有一条**原生 Win32 快通道**：窗口几何、启动、注入、取色。名字跟着职责走。
+26 秒是上游的设计选择（全桌面可访问性优先），不是 bug。在 `site-packages` 里打补丁活不过下一次 `uv tool upgrade`，所以这里的做法是**上游一行不改，插件自带旁路**：`Snapshot` 在真有无障碍元素的窗口（浏览器、原生控件、设置页）上依然值得那 26 秒，快通道只接管它答不好的部分。
 
-`mcp__windows__*` 那 18 个工具仍然在，一行都没改——`Snapshot` 在真有无障碍元素的窗口（浏览器、原生控件、设置页）上依然值得那 26 秒。快通道只接管它答不好的那部分。
+## 安装
 
----
-
-## 快通道
-
-两个自有工具，跟桥并列存在，共用同一个 Computer Use 开关：
-
-| 工具 | 作用 |
-| --- | --- |
-| `windows_fast` | 单步原语：`windows` / `rect` / `focus` / `launch` / `click` / `move` / `key` / `type` / `pixel` / `wait` / `kill` |
-| `windows_run` | 一条 recipe 跑完多步，逐步计时，返回失败步号 |
-
-`lib/fastpath.js` + `tools/fastpath-host.ps1` 是它们的执行层：一个常驻的 PowerShell JSON-lines 宿主，启动时声明 Per-Monitor V2 DPI，直接调 Win32。
-
-| op | 实测耗时 | 对照 |
-| --- | --- | --- |
-| `windows`（枚举 + 物理像素矩形） | 2–22 ms | `Snapshot` 26 060 ms |
-| `launch`（起进程 → 等窗口稳定 → 回矩形） | 1.6–3.0 s | 无此能力（`App` 被排除） |
-| `click`（聚焦 + SendInput） | 90–340 ms | `Click` 570 ms |
-| `pixel` | 5–35 ms | 一次 `Screenshot` 230–790 ms |
-| `wait`（窗口/像素/静帧） | 80–900 ms | 只能靠模型反复截图 |
-
-### 一条 recipe 顶 18 次工具调用
-
-Kingdom Rush Origins 从「启动」到「进入战场」：
-
-| 方式 | 模型往返 | 墙钟时间 |
-| --- | --- | --- |
-| 全走 MCP 桥（本次实测） | 18 次 | 304 s |
-| `windows_run` + `examples/kingdom-rush-origins.json` | 1 次 | **19 s** |
-
-recipe 的关键不是快，是**每一步都验证**：`click_until` 点完立刻盯一个像素或窗口尺寸，没变化就重试。游戏启动时窗口会先建成 806×629 再变成 406×529，菜单会先吞掉一次点击再响应——没有这层验证，点击序列就会像 304 s 那次一样静默错位。
-
-```json
-{ "click_until": { "at": [440, 724], "retries": 3, "timeoutMs": 2500,
-                   "until": { "pixel": [600, 730], "hex": "#A8AC97" } } }
-```
-
-### 它踩过的坑（都写进代码注释了）
-
-- **`SendInput` 的按下/抬起也必须带坐标。** 只给 `MOUSEEVENTF_MOVE` 归一化坐标、按下抬起传 `(0,0)`，会让每一次点击都落在虚拟桌面左上角，而 `GetCursorPos` 仍然报告你想要的点——看起来点了，其实没点到。
-- **`Process.MainWindowHandle` 会指向 SDL 的隐藏辅助窗口**（实测 806×629、无标题），必须按「新出现的、有标题的、尺寸稳定的」窗口来选。
-- **`AttachThreadInput` + `SetForegroundWindow` 之后一旦 detach，前台会弹回原来的窗口。** 可靠做法是 ALT 轻敲 + topmost 往返 + `SwitchToThisWindow` 兜底，并且**验证** `GetForegroundWindow()` 真的等于目标窗口，不等就报错而不是继续点。
-
-## 三分钟上手
-
-### 1. 装 uv（Python 包管理器）
+### 1. 装 uv
 
 ```powershell
 winget install --id=astral-sh.uv -e
 ```
 
-装完**重启 DSH**，让它能在 PATH 上找到 `uv`。
+装完**重启 DSH**，让跑 DSH 的那个进程能在 PATH 上找到 `uv`。
 
 ### 2. 装插件
 
-在 **DSH Desktop → 设置 → 插件** 里添加这个 bundle，填仓库地址：
+DSH Desktop → **设置 → 插件** → 添加 bundle，填：
 
 ```
 github:xkzm123/dsh-windows-control
@@ -167,57 +60,104 @@ github:xkzm123/dsh-windows-control
 dsh plugin --profile <profile> add github:xkzm123/dsh-windows-control
 ```
 
-装完**重启 DSH**，让新的 patch 层在启动时生效。
+装完**重启 DSH**。
 
-> `desktop` 这个 profile 归 Electron 应用所有，CLI 会拒绝所有针对它的命令——包括只读的。改 `desktop` 请走图形界面。
+> `desktop` 这个 profile 归 Electron 应用所有，CLI 会拒绝所有针对它的命令，包括只读的。改 `desktop` 走图形界面。
 
 ### 3. 装依赖 + 开开关
 
-打开 **设置 → 桌面控制 → 依赖**，点 **下载并安装**：
+**设置 → 桌面控制 → 依赖** → **下载并安装**。首次约 60 MB，走测速最快的镜像，页面上能实时看到日志。装完插件会把桥指向新装的 exe，**再重启一次 DSH**。
 
-- 首次约 60 MB，走测速最快的镜像，页面上能实时看到安装日志
-- 装完插件会自动把桥指向新装的 exe，**再重启一次 DSH** 让它生效
-- 重启后回到输入框，点左下角的 **Computer Use**，指示灯变绿
+回到输入框，点左下角的 **Computer Use**，指示灯变绿。问模型一句"截个屏看看我现在在干什么"验证。
 
-到这里就通了。问模型一句「截个屏看看我现在在干什么」验证一下。
+## 用法
 
----
+### `windows_fast`：一次一步
 
-## 界面在哪里
-
-<div align="center">
-  <img src="assets/switch.svg" alt="Computer Use 开关的位置，以及设置页入口" width="100%">
-</div>
-
-只有两个地方：
-
-- **输入框工具行**：`Computer Use` 胶囊，带一个状态点。绿=开，灰=关，橙=宿主连不上或还没注册到工具。
-- **设置 → 桌面控制**：依赖安装 / 更新 / 回退、桥接参数、镜像策略、惰性工具开关，全在这一页。
-
-插件自己的卡片（设置 → 插件 → 本插件）只留一行状态和一句指路，不重复放安装按钮。
-
----
-
-## 配置
-
-全部在 **设置 → 桌面控制**。改完点保存，插件参数立即生效，**桥接参数要重启 DSH**（MCP 客户端只在启动时读一次那一行配置）。
-
-| 项 | 默认 | 说明 |
+| op | 作用 | 典型耗时 |
 | --- | --- | --- |
-| 工具调用超时 | `120000` ms | 5000–600000。截屏和 UI 树遍历很慢，调小容易中断，调大卡住时等得久 |
-| 截图缩放 | `0.75` | `0.25 / 0.5 / 0.75 / 1`。越小越省视觉 token，细节也越少 |
-| 截图后端 | `auto` | `dxcam` 最快，`mss` 居中，`pillow` 最慢但最稳 |
-| 截图闪光边框 | 关 | 关掉可少一次桌面重绘 |
-| 屏蔽的工具 | `App, PowerShell, FileSystem` | 不出现在工具表里，省上下文 |
-| 启动时检查更新 | 开 | 每次启动后台查一次，结果缓存 6 小时 |
-| 首选镜像 | `auto` | 也可以固定 USTC / 阿里云 / 腾讯云 / 华为云 / 南京大学 / 清华 TUNA / PyPI |
-| 惰性工具 | 开 | 平时只给模型一个入口，调用后才下发工具定义 |
+| `windows` | 可见顶层窗口 + **物理像素**矩形（和 `click` 同一坐标系） | 2–22 ms |
+| `rect` / `focus` | 单个窗口的矩形 / 激活它（ALT 轻敲 + topmost + `SwitchToThisWindow`，并验证前台） | 20–280 ms |
+| `launch` | 起进程 → 等窗口稳定 → 回矩形 | 1.6–3.0 s |
+| `click` / `move` | SendInput 绝对坐标；给 `title`/`hwnd` 会先聚焦，聚焦失败就报错 | 90–340 ms |
+| `key` / `type` | `"ctrl+s"`、`"F5"`；Unicode 直输 | 40–90 ms |
+| `pixel` | 读一个像素，返回 `#rrggbb` | 5–35 ms |
+| `wait` | `mode: window \| window_size \| pixel \| idle` | 80–900 ms |
+| `kill` | 按 pid 或 hwnd 结束进程 | 10 ms |
 
-设置写在 `$DSH_HOME/dsh-windows-control.settings.json`，原子写入；越界的值会被夹回默认并明确告诉你，不会静默写坏。
+```json
+{ "op": "windows", "filter": "Kingdom" }
+{ "op": "click", "title": "王国保卫战", "x": 1073, "y": 745 }
+{ "op": "pixel", "x": 600, "y": 730 }
+```
 
----
+### `windows_run`：一条 recipe 跑完一串
 
-## 工作原理
+```json
+{
+  "steps": [
+    { "launch": { "path": "C:\\game.exe", "title": "Game", "timeoutMs": 20000 } },
+    { "click_until": { "window": "Game", "at": [303, 473], "relative": true,
+                       "until": { "minWidth": 1900, "stableMs": 700 } } },
+    { "click_until": { "at": [440, 724], "retries": 3, "timeoutMs": 2500,
+                       "until": { "pixel": [600, 730], "hex": "#A8AC97" } } }
+  ]
+}
+```
+
+可用步骤：`launch`、`wait_window`、`focus`、`rect`、`click`、`click_until`、`move`、`key`、`type`、`pixel`、`wait_pixel`、`wait_idle`、`assert`、`sleep`。每一步都会计时并回报，失败时给出行号和当时的实际值。
+
+`click_until` 是这里的核心：点完立刻盯一个条件，没变就重试。条件两种写法——窗口尺寸（`minWidth`/`minHeight`/`stableMs`），或像素（`pixel: [x,y]` 配 `hex` 或 `not`）。游戏启动器会先吞掉一次点击再响应，没有这层验证，后面的点击序列会静默错位。
+
+recipe 可以存成文件反复用：`$DSH_HOME/windows-control/recipes/<name>.json`，然后 `windows_run({ "profile": "kingdom-rush-origins" })`。仓库里的 [`examples/kingdom-rush-origins.json`](examples/kingdom-rush-origins.json) 就是下面那份实测数据用的配方。
+
+## 实测
+
+### 端到端：启动到进战场
+
+同一台机器，1920×1080，同一款游戏：
+
+| 步骤 | op | 耗时 | 尝试 | 判定条件 |
+| --- | --- | --- | --- | --- |
+| 启动 → 窗口稳定 | `launch` | 2.97 s | 1 | 标题非空 + 矩形连续三次采样不变 |
+| 配置窗「开始」 | `click_until` | 6.74 s | 3 | 窗口变成 ≥1900 宽并稳定 700 ms |
+| 聚焦游戏窗口 | `focus` | 0.28 s | 1 | `GetForegroundWindow()` 等于目标 hwnd |
+| 主菜单「开始」 | `click_until` | 3.47 s | 2 | (600,730) 变成石板色 `#A8AC97` |
+| 「存档 1」 | `click_until` | 0.31 s | 1 | (600,730) 离开石板色 |
+| 关卡节点 | `click_until` | 4.51 s | 2 | (533,400) 变成羊皮纸色 `#EFD37B` |
+| 「战斗」 | `click_until` | 0.75 s | 1 | (533,400) 离开羊皮纸色 |
+
+**合计 19.0 s，一次模型调用。** 同样的路径全走 MCP 桥是 **18 次工具调用、304 s**——其中真正干活的桌面动作只有约 6 s，其余是模型往返（230 s）和可以被省掉的等待（26 s 的 `Snapshot`、两次各约 10 s 的控制权封锁）。
+
+省下来的不是毫秒，是往返次数。这也是 recipe 存在的唯一理由。
+
+## 三个把点击吞掉的坑
+
+都是这轮真机调试撞出来的，注释留在代码里：
+
+**1. `SendInput` 的按下/抬起也必须带坐标。** 只给 `MOUSEEVENTF_MOVE` 归一化坐标、按下抬起传 `(0,0)`，在 `ABSOLUTE` 下会被归一化成虚拟桌面左上角——于是每次点击都落在屏幕角上，而 `GetCursorPos` 仍然老实报告你想要的点。看起来点了，其实没点到。
+
+**2. `Process.MainWindowHandle` 会指向 SDL 的隐藏辅助窗口。** 实测那个窗口 806×629、无标题，真正的启动器窗口是 406×529 并且会在约 1 秒内从前者切过去。所以 `launch` 只认"新出现的、有标题的、矩形连续三次采样不变的"窗口。
+
+**3. `AttachThreadInput` + `SetForegroundWindow` 一 detach 就把前台还回去了。** 表现是聚焦成功后约 500 ms 游戏被 Edge 顶下去，之后每一次点击都打进 Edge。现在改成 ALT 轻敲 + topmost 往返 + `SwitchToThisWindow` 兜底，并且**点之前验证前台真的等于目标窗口，不等就返回错误**，绝不假装成功。
+
+## 原理
+
+```mermaid
+flowchart LR
+    M[模型] -->|mcp__windows__*| B[官方 MCP 桥<br/>app.asar]
+    B -->|stdio| W[windows-mcp.exe]
+    W --> D[(Windows 桌面)]
+    M -->|windows_fast / windows_run| F[lib/fastpath.js]
+    F -->|JSON lines| H[tools/fastpath-host.ps1]
+    H --> D
+```
+
+桥那条链路一行都不归这个仓库管：模型发调用、官方桥走 stdio、`windows-mcp.exe` 用 UI Automation 和 Win32 干活。快通道是第二个子进程，启动时声明 Per-Monitor V2 DPI，直接调 `user32`/`gdi32`，第一次调用时才会拉起（约 1.5 s），之后每次调用 5–340 ms。
+
+### 惰性工具（默认开启）
+
+18 份 schema 每一步都占上下文，包括根本不碰桌面的那些步骤。开启后工具表里只有一个 `windows_desktop` 入口，调用后才把选中的能力下发，并按 session 记住。关掉这个设置就恢复"每步都全量下发"。
 
 ### 装依赖
 
@@ -234,86 +174,80 @@ flowchart TD
     H --> I[重启 DSH 生效]
 ```
 
-### 惰性工具（默认开启）
+## 配置
 
-```mermaid
-sequenceDiagram
-    participant M as 模型
-    participant D as DSH
-    participant W as windows-mcp
-    Note over M: 工具表里只有 windows_desktop
-    M->>D: windows_desktop（无参数）
-    D-->>M: 18 个能力的定义
-    Note over M: 下一步起，这些工具才进工具表
-    M->>D: mcp__windows__Screenshot
-    D->>W: stdio 转发
-    W-->>D: 截图 + 光标 + 窗口摘要
-    D-->>M: 结果
-```
+全部在 **设置 → 桌面控制**。改完保存，插件参数立即生效；**桥接参数要重启 DSH**（MCP 客户端只在启动时读一次那一行）。
 
-18 份 schema 每一步都占上下文，包括根本没人碰桌面的那些步骤。惰性工具把这一步挪到"真的要用了"的时候，调用后按 session 记住。
+| 项 | 默认 | 说明 |
+| --- | --- | --- |
+| 工具调用超时 | `120000` ms | 5000–600000。截屏和 UI 树遍历很慢，调小容易中断 |
+| 截图缩放 | `0.75` | `0.25 / 0.5 / 0.75 / 1`。越小越省视觉 token |
+| 截图后端 | `auto` | `dxcam` 最快，`mss` 居中，`pillow` 最慢但最稳 |
+| 截图闪光边框 | 关 | 关掉可少一次桌面重绘 |
+| 屏蔽的工具 | `App, PowerShell, FileSystem` | 不出现在工具表里，省上下文 |
+| 启动时检查更新 | 开 | 后台查一次，结果缓存 6 小时 |
+| 首选镜像 | `auto` | 也可固定 USTC / 阿里云 / 腾讯云 / 华为云 / 南京大学 / 清华 TUNA / PyPI |
+| 惰性工具 | 开 | 平时只给模型一个入口 |
 
----
+设置写在 `$DSH_HOME/dsh-windows-control.settings.json`，原子写入；越界的值会被夹回默认并明确告诉你。
+
+快通道还有两个环境变量：`DSH_WINDOWS_MCP_PWSH` 指定用哪个 PowerShell（默认 `pwsh.exe` → `pwsh` → `powershell.exe`），`DSH_DESKTOP_BRIDGE_PROFILE` 指定改哪个 profile 的 patch 层。
 
 ## 安全模型
-
-三条，按重要性排：
 
 1. **默认关闭，且关闭是真的关闭。** 工具既不出现在工具表，调用也会被 dispatch guard 拦下。开关状态存在 `$DSH_HOME/dsh-windows-control.state.json`，重启不丢。
 2. **改开关必须来自 DSH 窗口。** 所有写操作（开关、安装、更新、设置）都要求带 GUI 的签名 session cookie——模型就算有 shell 权限，也没法给自己开桌面控制。拿不到 `connection` 服务的部署会在 `/state` 里报 `gate: unobservable`，不会假装安全。
 3. **不回家。** 上游默认开 PostHog 遥测，插件在桥的行里写死 `ANONYMIZED_TELEMETRY=false`。
 
-除此之外请自己判断：一旦开关打开，模型能做你在这个桌面上能做的一切——包括读写注册表、结束进程。不确定的时候，先关掉开关再让它干活。
+开关一旦打开，模型能做你在这个桌面上能做的一切，包括读写注册表和结束进程。不确定的时候先关掉。
 
----
+## 限制
+
+- **配方里的坐标绑定分辨率。** `examples/kingdom-rush-origins.json` 是 1920×1080 下量的，换分辨率要重量。模板匹配和 OCR 还没做——那是让配方脱离硬编码坐标的下一步。
+- **无障碍信息仍然只有桥能给。** 快通道只做 Win32，不碰 UIA。要读浏览器或原生控件的元素，还是得走 26 秒的 `Snapshot`。
+- **快通道是个 PowerShell 子进程。** 首次启动约 1.5 s；每次调用比进程内调用多一次 IPC，但对 5 ms 级的操作来说这部分开销是可见的。
+- **上游 18 个工具一行没改。** 它们的慢、它们的 `USER_CONTROL` 闸门，这里都原样保留，只是不再挡在关键路径上。
 
 ## 常见问题
 
 **装了插件，但模型看不到桌面工具**
-桥的那一行出厂是 `disabled: true`，这是故意的：`uvx` 冷启动会解析整棵 Python 依赖树，慢网络下能把 DSH 卡在"加载插件"好几分钟。去 **设置 → 桌面控制 → 依赖** 点安装，装完重启。
+桥的那一行出厂是 `disabled: true`，故意的：`uvx` 冷启动会解析整棵 Python 依赖树，慢网络下能把 DSH 卡在"加载插件"好几分钟。去 **设置 → 桌面控制 → 依赖** 点安装，装完重启。
 
 **显示「未找到 uv」**
 `uv` 不在跑 DSH 那个进程的 PATH 上。装完 uv 要**重启 DSH**，不是重启终端。
 
 **改了桥接参数没反应**
-桥接参数写进 profile 的 `cordis.patch.yml`，MCP 客户端只在启动时读一次。**重启 DSH**。设置页会明确显示"已写入，重启后生效"。
+桥接参数写进 profile 的 `cordis.patch.yml`，MCP 客户端只在启动时读一次。**重启 DSH**，设置页会显示"已写入，重启后生效"。
 
 **提示「检测到多个已装本插件的 profile」**
 插件不去猜该改哪一个。给跑 DSH 的进程设 `DSH_DESKTOP_BRIDGE_PROFILE=<profile 名>`，或给绝对路径，再重试。
 
 **截图太糊 / 太费 token**
-调 `截图缩放`：要看清小字用 `1`，只想看布局用 `0.5`。还可以关掉惰性工具以外的东西——比如把 `App`、`PowerShell` 屏蔽掉省上下文。
-
-**工具调用超时**
-截屏和 `WaitFor` 本来就慢。把 `工具调用超时` 往上调（最大 600000），比反复重试划算。
+调 `截图缩放`：要看清小字用 `1`，只看布局用 `0.5`。
 
 **想彻底停用**
 关掉 Computer Use 就够了——工具对模型不可见。想连依赖一起清掉：`uv tool uninstall windows-mcp`，再删掉 `$DSH_HOME/dsh-windows-control/toolchain`。
-
----
 
 ## 开发
 
 ```powershell
 npm install
-npm test        # 43 个用例，约 11 秒
+npm test        # 52 个用例，约 10 秒
 npm run check   # 语法检查
 npm run dump    # 在真实 profile 上打印合成后的配置树，不改动它
 ```
 
 零运行时依赖，只用 `node:*`。三条纪律写在 `lib/index.js` 头部，改代码前先读：`apply()` 永不抛、只注入确定存在的服务、不打日志噪音。
 
-调试工具在 `tools/`（不发布到 npm）：`mcp-handshake.mjs` 直接和 Windows-MCP 握手，`probe-asar.mjs` 读 Electron 的 `app.asar`，`update-e2e.mjs` 跑真实的下载→激活→回退链路。
+调试脚本在 `tools/`（不发布到 npm）：`mcp-handshake.mjs` 直接和 Windows-MCP 握手，`probe-asar.mjs` 读 Electron 的 `app.asar`，`update-e2e.mjs` 跑真实的下载→激活→回退链路；`repro/enum-bench.ps1` 量 `EnumWindows` 的成本。
 
 欢迎提 issue 和 PR。
 
----
-
-## 致谢与许可
+## 许可与来源
 
 MIT，见 [LICENSE](LICENSE)。
 
 - [CursorTouch/Windows-MCP](https://github.com/CursorTouch/Windows-MCP)（MIT）负责真正的桌面自动化，本项目只做接线。
-- 本项目派生自 [dsh-windows-mcp](https://github.com/helloHub1212/dsh-windows-mcp)（MIT），原始版权声明保留在 `LICENSE`，详见 [NOTICE](NOTICE)。
+- 本项目派生自 [dsh-windows-mcp](https://github.com/helloHub1212/dsh-windows-mcp)（MIT），改名为 `dsh-windows-control` 后增加了原生快通道；原始版权声明保留在 `LICENSE`，改名链与改动范围见 [NOTICE](NOTICE)。
 - MCP 客户端桥属于 DeepSeek Harness 本体，不在本仓库分发。
 - 与 DeepSeek 官方、Windows-MCP 作者均无隶属关系。
