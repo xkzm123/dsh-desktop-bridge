@@ -1,0 +1,22 @@
+{
+  "name": "kingdom-rush-origins",
+  "description": "Kingdom Rush Origins: launcher config -> main menu -> save slot -> level -> battle. Coordinates measured at 1920x1080 on the primary display; every transition is verified by a pixel probe, so a slow frame retries the click instead of desyncing.",
+  "resolution": [1920, 1080],
+  "window": "王国保卫战",
+  "app": "E:\\entertainment\\steam\\steamapps\\common\\Kingdom Rush Origins\\Kingdom Rush Origins.exe",
+  "steps": [
+    { "launch": { "path": "E:\\entertainment\\steam\\steamapps\\common\\Kingdom Rush Origins\\Kingdom Rush Origins.exe", "title": "王国保卫战", "timeoutMs": 20000 } },
+
+    { "click_until": { "window": "王国保卫战", "at": [303, 473], "relative": true, "retries": 5, "timeoutMs": 2500, "until": { "minWidth": 1900, "stableMs": 700 } } },
+
+    { "focus": { "title": "王国保卫战", "retries": 4, "retryDelayMs": 300 } },
+
+    { "click_until": { "at": [440, 724], "retries": 3, "timeoutMs": 2500, "until": { "pixel": [600, 730], "hex": "#A8AC97" } } },
+
+    { "click_until": { "at": [653, 720], "retries": 3, "timeoutMs": 3000, "until": { "pixel": [600, 730], "not": "#A8AC97" } } },
+
+    { "click_until": { "at": [247, 583], "retries": 4, "timeoutMs": 3000, "until": { "pixel": [533, 400], "hex": "#EFD37B" } } },
+
+    { "click_until": { "at": [1220, 707], "retries": 3, "timeoutMs": 5000, "until": { "pixel": [533, 400], "not": "#EFD37B" } } }
+  ]
+}

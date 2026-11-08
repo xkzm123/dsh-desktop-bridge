@@ -29,6 +29,13 @@
 
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
+
+# The channel is UTF-8 in both directions: Chinese window titles are the norm on
+# this machine, and PowerShell defaults to the ANSI code page for stdio.
+[Console]::InputEncoding = [System.Text.Encoding]::UTF8
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+$OutputEncoding = [System.Text.Encoding]::UTF8
+
 Add-Type -AssemblyName System.Drawing
 
 Add-Type -TypeDefinition @'
@@ -57,6 +64,7 @@ public static class FP
     [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
     [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
     [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h);
+    [DllImport("user32.dll")] public static extern void SwitchToThisWindow(IntPtr h, bool altTab);
     [DllImport("user32.dll")] public static extern bool BringWindowToTop(IntPtr h);
     [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int cmd);
     [DllImport("user32.dll")] public static extern bool SetWindowPos(IntPtr h, IntPtr after, int x, int y, int cx, int cy, uint flags);
@@ -100,24 +108,58 @@ public static class FP
         return pid;
     }
 
-    public static void Focus(IntPtr h)
+    static void AltTap()
     {
+        // A synthetic ALT tap makes this thread the last-input thread, which is
+        // exactly what unlocks SetForegroundWindow for a background process.
+        Key(0x12, false);
+        Key(0x12, true);
+        System.Threading.Thread.Sleep(30);
+    }
+
+    public static bool Focus(IntPtr h)
+    {
+        if (h == IntPtr.Zero) return false;
         if (IsIconic(h)) ShowWindow(h, 9);
-        var fg = GetForegroundWindow();
-        uint mine = GetCurrentThreadId();
-        uint target = GetWindowThreadProcessId(h, IntPtr.Zero);
-        bool attached = false;
-        if (target != 0 && target != mine) attached = AttachThreadInput(mine, target, true);
-        try
+        // Deliberately NO AttachThreadInput: attaching to the current foreground
+        // thread and detaching afterwards hands activation straight back to the
+        // window that was in front before (measured: the game lost the foreground
+        // again ~500 ms after a successful SetForegroundWindow, and every later
+        // click landed in Edge).
+        //
+        // Two documented-ish steps are enough:
+        //   1. an ALT tap makes this thread the last-input thread, which unlocks
+        //      SetForegroundWindow for a background process;
+        //   2. a topmost round-trip lifts the window above whatever normal-band
+        //      window currently covers it.
+        AltTap();
+        SetWindowPos(h, new IntPtr(-1), 0, 0, 0, 0, 0x0001 | 0x0002); // HWND_TOPMOST
+        SetWindowPos(h, new IntPtr(-2), 0, 0, 0, 0, 0x0001 | 0x0002); // HWND_NOTOPMOST
+        BringWindowToTop(h);
+        SetForegroundWindow(h);
+        SetFocus(h);
+        System.Threading.Thread.Sleep(70);
+        if (GetForegroundWindow() == h) return true;
+        // Retries: keep the window topmost, then the legacy SwitchToThisWindow,
+        // which still activates windows that refuse SetForegroundWindow.
+        for (int attempt = 0; attempt < 2; attempt++)
         {
-            BringWindowToTop(h);
+            AltTap();
+            SetWindowPos(h, new IntPtr(-1), 0, 0, 0, 0, 0x0001 | 0x0002);
             SetForegroundWindow(h);
-            SetFocus(h);
+            System.Threading.Thread.Sleep(60);
+            if (GetForegroundWindow() == h) return true;
+            SwitchToThisWindow(h, false);
+            System.Threading.Thread.Sleep(60);
+            if (GetForegroundWindow() == h) return true;
         }
-        finally
-        {
-            if (attached) AttachThreadInput(mine, target, false);
-        }
+        return GetForegroundWindow() == h;
+    }
+
+    public static void Unpin(IntPtr h)
+    {
+        if (h == IntPtr.Zero) return;
+        SetWindowPos(h, new IntPtr(-2), 0, 0, 0, 0, 0x0001 | 0x0002);
     }
 
     static void Mouse(uint flags, int x, int y)
@@ -132,22 +174,33 @@ public static class FP
         SendInput(1, one, Marshal.SizeOf(typeof(INPUT)));
     }
 
-    public static void MoveAbsolute(int x, int y)
+    static void Normalized(int x, int y, out int nx, out int ny)
     {
         int vx = GetSystemMetrics(76), vy = GetSystemMetrics(77);
         int vw = GetSystemMetrics(78), vh = GetSystemMetrics(79);
-        long nx = (long)(x - vx) * 65535 / Math.Max(1, vw - 1);
-        long ny = (long)(y - vy) * 65535 / Math.Max(1, vh - 1);
-        Mouse(0x8001 | 0x4000, (int)nx, (int)ny); // MOVE | ABSOLUTE | VIRTUALDESK
+        nx = (int)((long)(x - vx) * 65535 / Math.Max(1, vw - 1));
+        ny = (int)((long)(y - vy) * 65535 / Math.Max(1, vh - 1));
+    }
+
+    public static void MoveAbsolute(int x, int y)
+    {
+        int nx, ny;
+        Normalized(x, y, out nx, out ny);
+        Mouse(0x8001 | 0x4000, nx, ny); // MOVE | ABSOLUTE | VIRTUALDESK
     }
 
     public static void Button(uint down, uint up, int x, int y)
     {
-        MoveAbsolute(x, y);
-        System.Threading.Thread.Sleep(25);
-        Mouse(down | 0x8000 | 0x4000, 0, 0);
+        int nx, ny;
+        Normalized(x, y, out nx, out ny);
+        // Every event carries the coordinate. A down/up with ABSOLUTE and dx=dy=0
+        // normalizes to the virtual-screen origin, so the press landed in the
+        // top-left corner while GetCursorPos still reported the intended point.
+        Mouse(0x8001 | 0x4000, nx, ny);
+        System.Threading.Thread.Sleep(30);
+        Mouse(down | 0x8000 | 0x4000, nx, ny);
         System.Threading.Thread.Sleep(45);
-        Mouse(up | 0x8000 | 0x4000, 0, 0);
+        Mouse(up | 0x8000 | 0x4000, nx, ny);
     }
 
     public static void Key(ushort vk, bool up)
@@ -261,9 +314,13 @@ function Invoke-Op {
         'focus' {
             $h = Resolve-Window -Hwnd $req.hwnd -Title ([string]$req.title)
             if ($h -eq [IntPtr]::Zero) { return [pscustomobject]@{ ok = $false; error = 'window not found' } }
-            [FP]::Focus($h)
-            Start-Sleep -Milliseconds 120
-            return [pscustomobject]@{ ok = $true; window = (Get-WindowRow -Hwnd $h); foreground = [int64][FP]::GetForegroundWindow() }
+            $okFocus = [FP]::Focus($h)
+            Start-Sleep -Milliseconds 80
+            $row = Get-WindowRow -Hwnd $h
+            if (-not $okFocus -or $null -eq $row) {
+                return [pscustomobject]@{ ok = $false; error = 'window vanished or refused activation'; window = $row; foreground = [int64][FP]::GetForegroundWindow(); focusOk = $okFocus }
+            }
+            return [pscustomobject]@{ ok = $true; window = $row; foreground = [int64][FP]::GetForegroundWindow(); focusOk = $okFocus }
         }
         'launch' {
             $path = [string]$req.path
@@ -271,22 +328,40 @@ function Invoke-Op {
             $argList = @()
             if ($req.args) { $argList = @($req.args | ForEach-Object { [string]$_ }) }
             $sw = [Diagnostics.Stopwatch]::StartNew()
+            # Remember every window that already exists. A stale window with the
+            # same title (an earlier run of the same app, or a leftover launcher)
+            # must never satisfy the wait, or the caller focuses the wrong process
+            # and every following click lands in a dead window.
+            $baseline = @{}
+            foreach ($w in (Get-Windows)) { $baseline[[int64]$w.hwnd] = $true }
             $p = if ($argList.Count -gt 0) { Start-Process -FilePath $path -ArgumentList $argList -PassThru } else { Start-Process -FilePath $path -PassThru }
             $waitMs = if ($req.waitMs) { [int]$req.waitMs } else { 20000 }
             $want = [string]$req.title
+            # Poll for a NEW window that stays put. Re-resolving on every pass
+            # (instead of latching the first handle) is what survives the SDL
+            # dance: the app creates an 806x629 frame with the real title, throws
+            # it away ~300 ms later and builds the 406x529 launcher.
             $row = $null
+            $lastSig = $null
+            $stable = 0
             while ($sw.ElapsedMilliseconds -lt $waitMs) {
-                Start-Sleep -Milliseconds 120
+                Start-Sleep -Milliseconds 110
                 $p.Refresh()
                 if ($p.HasExited) {
                     return [pscustomobject]@{ ok = $false; error = 'process exited before a window appeared'; exitCode = $p.ExitCode; elapsedMs = $sw.ElapsedMilliseconds; pid = $p.Id }
                 }
-                if ($want -ne '') {
-                    $row = Get-Windows -Filter $want | Where-Object { $_.title -match $want } | Select-Object -First 1
-                } elseif ($p.MainWindowHandle -ne 0) {
-                    $row = Get-WindowRow -Hwnd ([IntPtr]$p.MainWindowHandle)
-                }
-                if ($row) { break }
+                $cur = Get-Windows |
+                    Where-Object {
+                        $_.title -ne '' -and
+                        -not $baseline.ContainsKey([int64]$_.hwnd) -and
+                        ($_.pid -eq $p.Id -or ($want -ne '' -and $_.title -match $want))
+                    } |
+                    Select-Object -First 1
+                if ($null -eq $cur) { $stable = 0; $lastSig = $null; continue }
+                $sig = "$($cur.hwnd)|$($cur.x)|$($cur.y)|$($cur.w)|$($cur.h)"
+                if ($sig -eq $lastSig) { $stable++ } else { $stable = 0; $lastSig = $sig }
+                $row = $cur
+                if ($stable -ge 3) { break }
             }
             $sw.Stop()
             if (-not $row) { return [pscustomobject]@{ ok = $false; error = 'no window within waitMs'; elapsedMs = $sw.ElapsedMilliseconds; pid = $p.Id } }
@@ -295,7 +370,8 @@ function Invoke-Op {
         'click' {
             $h = [IntPtr]::Zero
             if ($req.hwnd -or $req.title) { $h = Resolve-Window -Hwnd $req.hwnd -Title ([string]$req.title) }
-            if ($h -ne [IntPtr]::Zero) { [FP]::Focus($h); Start-Sleep -Milliseconds 90 }
+            $focusOk = $null
+            if ($h -ne [IntPtr]::Zero) { $focusOk = [FP]::Focus($h); Start-Sleep -Milliseconds 60 }
             $x = [int]$req.x; $y = [int]$req.y
             $button = if ($req.button) { [string]$req.button } else { 'left' }
             $clicks = if ($req.clicks) { [int]$req.clicks } else { 1 }
@@ -310,7 +386,13 @@ function Invoke-Op {
             }
             $pt = New-Object FP+POINT
             [void][FP]::GetCursorPos([ref]$pt)
-            return [pscustomobject]@{ ok = $true; clicked = @($x, $y); cursor = @($pt.X, $pt.Y); foreground = [int64][FP]::GetForegroundWindow(); focused = [int64]$h }
+            $fgNow = [int64][FP]::GetForegroundWindow()
+            if ($h -ne [IntPtr]::Zero -and $fgNow -ne [int64]$h) {
+                # Clicking anyway would land in whatever window is actually in
+                # front (measured: Edge), so report the miss instead of pretending.
+                return [pscustomobject]@{ ok = $false; error = "window did not reach the foreground (fg=$fgNow want=$([int64]$h))"; clicked = @($x, $y); foreground = $fgNow; focused = [int64]$h }
+            }
+            return [pscustomobject]@{ ok = $true; clicked = @($x, $y); cursor = @($pt.X, $pt.Y); foreground = $fgNow; focused = [int64]$h; focusOk = $focusOk }
         }
         'move' {
             [FP]::MoveAbsolute([int]$req.x, [int]$req.y)
@@ -357,6 +439,9 @@ function Invoke-Op {
         'wait' {
             $mode = if ($req.mode) { [string]$req.mode } else { 'window' }
             $timeout = if ($req.timeoutMs) { [int]$req.timeoutMs } else { 10000 }
+            $stableMs = if ($req.stableMs) { [int]$req.stableMs } else { 0 }
+            $stableHwnd = $null
+            $stableSince = $null
             $sw = [Diagnostics.Stopwatch]::StartNew()
             $last = $null
             while ($sw.ElapsedMilliseconds -lt $timeout) {
@@ -365,6 +450,34 @@ function Invoke-Op {
                         $want = [string]$req.title
                         $hit = Get-Windows -Filter $want | Where-Object { $_.title -match $want } | Select-Object -First 1
                         if ($hit) { $sw.Stop(); return [pscustomobject]@{ ok = $true; mode = $mode; elapsedMs = $sw.ElapsedMilliseconds; window = $hit } }
+                    }
+                    'window_size' {
+                        # A launcher that restarts its own process shows the small
+                        # config window first and the fullscreen surface a moment
+                        # later; waiting on the size is what makes the next click
+                        # land on the game instead of on a window that is about to
+                        # be replaced.
+                        $want = [string]$req.title
+                        $minW = if ($req.minWidth) { [int]$req.minWidth } else { 1 }
+                        $minH = if ($req.minHeight) { [int]$req.minHeight } else { 1 }
+                        $hit = Get-Windows -Filter $want |
+                            Where-Object { $_.title -match $want -and $_.w -ge $minW -and $_.h -ge $minH } |
+                            Select-Object -First 1
+                        if ($hit) {
+                            if ($stableMs -le 0) { $sw.Stop(); return [pscustomobject]@{ ok = $true; mode = $mode; elapsedMs = $sw.ElapsedMilliseconds; window = $hit } }
+                            # A launcher that restarts its own process tears the
+                            # window down and builds a new one; the handle must
+                            # survive long enough to be worth focusing.
+                            if ($stableHwnd -ne [int64]$hit.hwnd) {
+                                $stableHwnd = [int64]$hit.hwnd
+                                $stableSince = [Diagnostics.Stopwatch]::StartNew()
+                            } elseif ($stableSince.ElapsedMilliseconds -ge $stableMs) {
+                                $sw.Stop()
+                                return [pscustomobject]@{ ok = $true; mode = $mode; elapsedMs = $sw.ElapsedMilliseconds; window = $hit; stableMs = $stableSince.ElapsedMilliseconds }
+                            }
+                        } else {
+                            $stableHwnd = $null
+                        }
                     }
                     'pixel' {
                         $bmp = New-Object System.Drawing.Bitmap 1, 1
@@ -403,8 +516,9 @@ function Invoke-Op {
     }
 }
 
+# [Console]::Out has no settable AutoFlush in PowerShell (5.1 or 7); the writer
+# is flushed explicitly after every reply instead.
 $stdout = [Console]::Out
-$stdout.AutoFlush = $true
 while ($true) {
     $line = [Console]::In.ReadLine()
     if ($null -eq $line) { break }
@@ -421,4 +535,5 @@ while ($true) {
     $sw.Stop()
     $payload = [pscustomobject]@{ id = $id; ms = $sw.ElapsedMilliseconds; result = $result }
     $stdout.WriteLine(($payload | ConvertTo-Json -Depth 8 -Compress))
+    $stdout.Flush()
 }

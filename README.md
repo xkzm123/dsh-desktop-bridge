@@ -102,21 +102,46 @@ DeepSeek Harness 的 agent 能读文件、跑命令，但它看不见你的屏�
 
 ---
 
-## 快通道（WIP）
+## 快通道
 
-`lib/fastpath.js` + `tools/fastpath-host.ps1`：一个常驻的 PowerShell JSON-lines 宿主，声明 Per-Monitor V2 DPI，直接调 Win32。
+两个自有工具，跟桥并列存在，共用同一个 Computer Use 开关：
 
-| op | 用途 | 典型耗时 |
+| 工具 | 作用 |
+| --- | --- |
+| `windows_fast` | 单步原语：`windows` / `rect` / `focus` / `launch` / `click` / `move` / `key` / `type` / `pixel` / `wait` / `kill` |
+| `windows_run` | 一条 recipe 跑完多步，逐步计时，返回失败步号 |
+
+`lib/fastpath.js` + `tools/fastpath-host.ps1` 是它们的执行层：一个常驻的 PowerShell JSON-lines 宿主，启动时声明 Per-Monitor V2 DPI，直接调 Win32。
+
+| op | 实测耗时 | 对照 |
 | --- | --- | --- |
-| `windows` / `rect` | 可见顶层窗口 + 物理像素矩形（与 `Click` 同一坐标系） | 2–30ms |
-| `focus` | 激活窗口（含 AttachThreadInput 兜底） | ~120ms |
-| `launch` | 起进程 → 等窗口 → 回矩形，一条调用 | 进程启动时间 |
-| `click` / `move` / `key` / `type` | SendInput 绝对坐标（虚拟桌面），不经控制闸门 | 40–80ms |
-| `pixel` / `wait` | 取色 / 等窗口或等像素，替掉"再截一张图" | 30–80ms |
+| `windows`（枚举 + 物理像素矩形） | 2–22 ms | `Snapshot` 26 060 ms |
+| `launch`（起进程 → 等窗口稳定 → 回矩形） | 1.6–3.0 s | 无此能力（`App` 被排除） |
+| `click`（聚焦 + SendInput） | 90–340 ms | `Click` 570 ms |
+| `pixel` | 5–35 ms | 一次 `Screenshot` 230–790 ms |
+| `wait`（窗口/像素/静帧） | 80–900 ms | 只能靠模型反复截图 |
 
-**状态：尚未接线。** 宿主目前启动即崩（`$stdout.AutoFlush` 在 PowerShell 里不存在），修复后再在 `lib/index.js` 注册 `windows_fast` 工具。在那之前它不参与任何运行路径。
+### 一条 recipe 顶 18 次工具调用
 
----
+Kingdom Rush Origins 从「启动」到「进入战场」：
+
+| 方式 | 模型往返 | 墙钟时间 |
+| --- | --- | --- |
+| 全走 MCP 桥（本次实测） | 18 次 | 304 s |
+| `windows_run` + `examples/kingdom-rush-origins.json` | 1 次 | **19 s** |
+
+recipe 的关键不是快，是**每一步都验证**：`click_until` 点完立刻盯一个像素或窗口尺寸，没变化就重试。游戏启动时窗口会先建成 806×629 再变成 406×529，菜单会先吞掉一次点击再响应——没有这层验证，点击序列就会像 304 s 那次一样静默错位。
+
+```json
+{ "click_until": { "at": [440, 724], "retries": 3, "timeoutMs": 2500,
+                   "until": { "pixel": [600, 730], "hex": "#A8AC97" } } }
+```
+
+### 它踩过的坑（都写进代码注释了）
+
+- **`SendInput` 的按下/抬起也必须带坐标。** 只给 `MOUSEEVENTF_MOVE` 归一化坐标、按下抬起传 `(0,0)`，会让每一次点击都落在虚拟桌面左上角，而 `GetCursorPos` 仍然报告你想要的点——看起来点了，其实没点到。
+- **`Process.MainWindowHandle` 会指向 SDL 的隐藏辅助窗口**（实测 806×629、无标题），必须按「新出现的、有标题的、尺寸稳定的」窗口来选。
+- **`AttachThreadInput` + `SetForegroundWindow` 之后一旦 detach，前台会弹回原来的窗口。** 可靠做法是 ALT 轻敲 + topmost 往返 + `SwitchToThisWindow` 兜底，并且**验证** `GetForegroundWindow()` 真的等于目标窗口，不等就报错而不是继续点。
 
 ## 三分钟上手
 

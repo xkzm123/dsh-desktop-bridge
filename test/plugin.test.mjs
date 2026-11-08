@@ -160,7 +160,11 @@ test("windows_control_doctor registers and produces a usable report", () => {
     },
   });
 
-  assert.equal(registered.length, 2, "the doctor and the lazy-tool entry are both registered");
+  assert.deepEqual(
+    registered.map((definition) => definition.name).sort(),
+    ["windows_control_doctor", "windows_desktop", "windows_fast", "windows_run"],
+    "the doctor, the lazy-tool entry and both native fast-path tools are registered",
+  );
   const definition = registered.find((candidate) => candidate.name === "windows_control_doctor");
   assert.ok(definition, "the doctor is registered");
   assert.equal(definition.name, "windows_control_doctor");

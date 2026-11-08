@@ -21,8 +21,26 @@ All notable changes to this project are documented here. The format follows
   Win32 sidecar (JSON-lines over stdio) for the ops the MCP bridge answers
   badly — window enumeration with physical-pixel rects, focus, launch-and-wait,
   SendInput clicks/keys, pixel probe, predicate wait.
-  **Not wired yet**: the host aborts on startup (`$stdout.AutoFlush` does not
-  exist in PowerShell) and no tool registers it, so it is inert.
+- `windows_fast` and `windows_run`, both gated by the Computer Use switch.
+  `windows_run` executes a recipe in one model call with per-step timings;
+  `click_until` retries a click until a window grew or a pixel changed.
+- `lib/recipe.js` recipe engine and `examples/kingdom-rush-origins.json`.
+- Measured end to end: launching Kingdom Rush Origins and reaching the first
+  battle takes **19 s in one model round trip**, against 304 s over 18 round
+  trips through the MCP bridge alone.
+
+### Fixed (found by driving a real game window)
+
+- `SendInput` button events must carry the normalized coordinate; down/up with
+  `ABSOLUTE` and `dx=dy=0` pressed at the virtual-screen origin while
+  `GetCursorPos` still reported the intended point.
+- `launch` no longer trusts `Process.MainWindowHandle` (it resolves to an
+  untitled SDL helper window) and now re-resolves until a titled window's rect
+  stops moving.
+- Window activation no longer uses `AttachThreadInput`: detaching handed the
+  foreground back to the previous window, so later clicks landed in Edge. ALT
+  tap + topmost round-trip + `SwitchToThisWindow`, with the foreground verified
+  before every click.
 
 ### Measured (Windows 11, windows-mcp 0.8.8)
 
