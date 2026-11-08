@@ -1,0 +1,62 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1152" height="252" viewBox="0 0 1152 252" role="img" aria-label="dsh-windows-control — Windows desktop control for DeepSeek Harness">
+  <title>dsh-windows-control</title>
+  <desc>Datasheet-style header: two control channels and the measured cost of each.</desc>
+
+  <rect width="1152" height="252" fill="#0b0f14"/>
+  <rect x="0.5" y="0.5" width="1151" height="251" fill="none" stroke="#1f262e"/>
+
+  <!-- left: identity -->
+  <text x="48" y="86" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif"
+        font-size="44" font-weight="600" letter-spacing="-0.9" fill="#e6edf3">dsh-windows-control</text>
+
+  <text x="48" y="118" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif"
+        font-size="17" fill="#8b949e">Windows desktop control for DeepSeek Harness</text>
+
+  <line x1="48" y1="138" x2="360" y2="138" stroke="#1f262e"/>
+
+  <text x="48" y="162" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace"
+        font-size="13" fill="#8b949e">18 bridged MCP tools &#8212; seeing</text>
+  <text x="48" y="184" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13">
+    <tspan fill="#3fb950">2 native tools</tspan><tspan fill="#8b949e"> &#8212; geometry, launch, input</tspan>
+  </text>
+
+  <!-- divider -->
+  <line x1="648" y1="54" x2="648" y2="196" stroke="#1f262e"/>
+
+  <!-- right: measurement table -->
+  <text x="688" y="72" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace"
+        font-size="10.5" letter-spacing="2.4" fill="#6e7681">MEASURED</text>
+  <line x1="688" y1="84" x2="1104" y2="84" stroke="#1f262e"/>
+
+  <text x="688" y="112" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace"
+        font-size="14" fill="#8b949e">Snapshot &#183; UIA tree</text>
+  <text x="1104" y="112" text-anchor="end" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace"
+        font-size="14" fill="#d29922">26.06 s</text>
+
+  <text x="688" y="140" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace"
+        font-size="14" fill="#8b949e">EnumWindows + rect</text>
+  <text x="1104" y="140" text-anchor="end" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace"
+        font-size="14" fill="#3fb950">0.002 s</text>
+
+  <text x="688" y="168" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace"
+        font-size="14" fill="#8b949e">click &#183; SendInput</text>
+  <text x="1104" y="168" text-anchor="end" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace"
+        font-size="14" fill="#8b949e">0.09&#8211;0.34 s</text>
+
+  <line x1="688" y1="180" x2="1104" y2="180" stroke="#1f262e"/>
+  <text x="688" y="198" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace"
+        font-size="10.5" fill="#6e7681">one machine &#183; windows 11 &#183; 1920&#215;1080</text>
+
+  <!-- footer -->
+  <line x1="48" y1="214" x2="1104" y2="214" stroke="#1f262e"/>
+  <text x="48" y="234" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace"
+        font-size="11" fill="#6e7681">MIT</text>
+  <text x="84" y="234" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace"
+        font-size="11" fill="#333b45">/</text>
+  <text x="96" y="234" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace"
+        font-size="11" fill="#6e7681">node &#8805; 22</text>
+  <text x="188" y="234" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace"
+        font-size="11" fill="#333b45">/</text>
+  <text x="200" y="234" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace"
+        font-size="11" fill="#6e7681">windows 10 / 11</text>
+</svg>

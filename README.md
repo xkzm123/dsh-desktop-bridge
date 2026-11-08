@@ -1,3 +1,5 @@
+<img src="assets/banner.svg" alt="dsh-windows-control" width="100%">
+
 # dsh-windows-control
 
 [![CI](https://github.com/xkzm123/dsh-windows-control/actions/workflows/ci.yml/badge.svg)](https://github.com/xkzm123/dsh-windows-control/actions/workflows/ci.yml)
